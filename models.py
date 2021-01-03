@@ -44,7 +44,7 @@ class SoundSequence(tf.keras.utils.Sequence):
         Y = []
 
         for i, (path, label) in enumerate(zip(wav_paths, labels)):
-            wav, rate = librosa.load(path, sr=self.sr, duration=self.duration)
+            wav, rate = librosa.load(path, sr=self.sr, duration=self.duration, res_type='kaiser_fast')
             wav = tf.convert_to_tensor(wav)
             wav = tf.expand_dims(wav, 1)
             wav = self.pad_up_to(wav, [rate * int(self.duration), 1], 0)
@@ -106,19 +106,24 @@ class VAE(keras.Model):
         with tf.GradientTape() as tape:
             z_mean, z_log_var, z = encoder(data)
             reconstruction = decoder(z)
-            reconstruction_loss = tf.reduce_mean(
-                keras.losses.binary_crossentropy(data, reconstruction)
+            mag_true, _ = tf.split(data, 2, 3)
+            mag_pred, _ = tf.split(reconstruction, 2, 3)
+            spectral_convergence_loss = tf.sqrt(
+                tf.divide(
+                    tf.reduce_sum(tf.square(mag_true - mag_pred)),
+                    tf.reduce_sum(tf.square(mag_true))
+                )
             )
-            reconstruction_loss *= 28 * 28
+
             kl_loss = 1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
             kl_loss = tf.reduce_mean(kl_loss)
             kl_loss *= -0.5
-            total_loss = reconstruction_loss + kl_loss
+            total_loss = spectral_convergence_loss + kl_loss
         grads = tape.gradient(total_loss, self.trainable_weights)
         self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
         return {
             "loss": total_loss,
-            "reconstruction_loss": reconstruction_loss,
+            "spectral_conv_loss": spectral_convergence_loss,
             "kl_loss": kl_loss,
         }
 
