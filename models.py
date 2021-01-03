@@ -1,20 +1,12 @@
-import numpy as np
+import os
+from glob import glob
+
+import kapre
 import librosa
+import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
-import kapre
-from sklearn.preprocessing import MinMaxScaler
-from scipy.io import wavfile
-import tensorflow as tf
-from glob import glob
-import os
-import numpy as np
-from tensorflow.keras.utils import to_categorical
-from kapre.composed import get_melspectrogram_layer
-from sklearn.preprocessing import LabelEncoder
-from collections import Counter
-import sys
 
 
 class SoundSequence(tf.keras.utils.Sequence):
