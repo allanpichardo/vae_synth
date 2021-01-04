@@ -196,7 +196,7 @@ def get_models_cnn(latent_dim=16, input_shape=(256, 1025, 2)):
     x = layers.Conv2DTranspose(64, 3, padding="same", kernel_regularizer=tf.keras.regularizers.l2(10e-10))(x)
     x = layers.ReLU()(x)
     x = layers.BatchNormalization()(x)
-    decoder_outputs = layers.Conv2DTranspose(2, 3, activation="sigmoid", padding="same", kernel_regularizer=tf.keras.regularizers.l2(10e-10))(x)
+    decoder_outputs = layers.Conv2DTranspose(2, 3, activation="relu", padding="same", kernel_regularizer=tf.keras.regularizers.l2(10e-10))(x)
     decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
 
     vae = VAE(encoder, decoder)
