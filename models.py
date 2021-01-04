@@ -50,7 +50,7 @@ class SoundSequence(tf.keras.utils.Sequence):
             wav = self.pad_up_to(wav, [rate * int(self.duration), 1], 0)
             img = self.stft_func(tf.stack([wav]))
             img = ((img - tf.reduce_min(img)) / (tf.reduce_max(img) - tf.reduce_min(img)))
-            padded = tf.image.resize_with_crop_or_pad(img, 128, 1025)
+            padded = tf.image.resize_with_crop_or_pad(img, 256, 1025)
             X.append(tf.squeeze(padded, 0))
             Y.append(tf.convert_to_tensor(label))
 
@@ -134,59 +134,59 @@ def img_to_complex(x):
     return tf.complex(m, p)
 
 
-def get_models_cnn(latent_dim=16, input_shape=(128, 1025, 2)):
+def get_models_cnn(latent_dim=16, input_shape=(256, 1025, 2)):
     encoder_inputs = keras.Input(shape=input_shape)
-    x = layers.Conv2D(32, 3, padding="same")(encoder_inputs)
+    x = layers.Conv2D(32, 3, padding="same", kernel_regularizer=tf.keras.regularizers.l2(10e-10))(encoder_inputs)
     x = layers.ReLU()(x)
     x = layers.BatchNormalization()(x)
     x = layers.AveragePooling2D()(x)
-    x = layers.Conv2D(32, 3, padding="same")(x)
+    x = layers.Conv2D(32, 3, padding="same", kernel_regularizer=tf.keras.regularizers.l2(10e-10))(x)
     x = layers.ReLU()(x)
     x = layers.BatchNormalization()(x)
     x = layers.AveragePooling2D()(x)
-    x = layers.Conv2D(32, 3, padding="same")(x)
+    x = layers.Conv2D(32, 3, padding="same", kernel_regularizer=tf.keras.regularizers.l2(10e-10))(x)
     x = layers.ReLU()(x)
     x = layers.BatchNormalization()(x)
     x = layers.AveragePooling2D()(x)
-    x = layers.Conv2D(32, 3, padding="same")(x)
+    x = layers.Conv2D(32, 3, padding="same", kernel_regularizer=tf.keras.regularizers.l2(10e-10))(x)
     x = layers.ReLU()(x)
     x = layers.BatchNormalization()(x)
     x = layers.AveragePooling2D()(x)
-    x = layers.Conv2D(64, 3, padding="same")(x)
-    x = layers.Conv2D(1, 3, padding="same")(x)
+    x = layers.Conv2D(64, 3, padding="same", kernel_regularizer=tf.keras.regularizers.l2(10e-10))(x)
+    x = layers.Conv2D(1, 3, padding="same", kernel_regularizer=tf.keras.regularizers.l2(10e-10))(x)
     x = layers.ReLU()(x)
     x = layers.BatchNormalization()(x)
     x = layers.Flatten()(x)
-    z_mean = layers.Dense(latent_dim, name="z_mean")(x)
-    z_log_var = layers.Dense(latent_dim, name="z_log_var")(x)
+    z_mean = layers.Dense(latent_dim, name="z_mean", kernel_regularizer=tf.keras.regularizers.l2(10e-10))(x)
+    z_log_var = layers.Dense(latent_dim, name="z_log_var", kernel_regularizer=tf.keras.regularizers.l2(10e-10))(x)
     z = Sampling()([z_mean, z_log_var])
     encoder = keras.Model(encoder_inputs, [z_mean, z_log_var, z], name="encoder")
 
     latent_inputs = keras.Input(shape=(latent_dim,))
-    x = layers.Dense(512, activation="relu")(latent_inputs)
-    x = layers.Reshape((8, 64, 1))(x)
-    x = layers.Conv2DTranspose(1, 3, padding="same")(x)
-    x = layers.Conv2DTranspose(32, 3, padding="same")(x)
+    x = layers.Dense(1024, activation="relu", kernel_regularizer=tf.keras.regularizers.l2(10e-10))(latent_inputs)
+    x = layers.Reshape((16, 64, 1))(x)
+    x = layers.Conv2DTranspose(1, 3, padding="same", kernel_regularizer=tf.keras.regularizers.l2(10e-10))(x)
+    x = layers.Conv2DTranspose(32, 3, padding="same", kernel_regularizer=tf.keras.regularizers.l2(10e-10))(x)
     x = layers.ReLU()(x)
     x = layers.BatchNormalization()(x)
     x = layers.UpSampling2D()(x)
-    x = layers.Conv2DTranspose(32, 3, padding="same")(x)
+    x = layers.Conv2DTranspose(32, 3, padding="same", kernel_regularizer=tf.keras.regularizers.l2(10e-10))(x)
     x = layers.ReLU()(x)
     x = layers.BatchNormalization()(x)
     x = layers.UpSampling2D()(x)
-    x = layers.Conv2DTranspose(32, 3, padding="same")(x)
+    x = layers.Conv2DTranspose(32, 3, padding="same", kernel_regularizer=tf.keras.regularizers.l2(10e-10))(x)
     x = layers.ReLU()(x)
     x = layers.BatchNormalization()(x)
     x = layers.UpSampling2D()(x)
-    x = layers.Conv2DTranspose(32, 3, padding="same")(x)
+    x = layers.Conv2DTranspose(32, 3, padding="same", kernel_regularizer=tf.keras.regularizers.l2(10e-10))(x)
     x = layers.ReLU()(x)
     x = layers.BatchNormalization()(x)
     x = layers.UpSampling2D()(x)
     x = layers.ZeroPadding2D(padding=[(0, 0), (1, 0)])(x)
-    x = layers.Conv2DTranspose(32, 3, padding="same")(x)
+    x = layers.Conv2DTranspose(32, 3, padding="same", kernel_regularizer=tf.keras.regularizers.l2(10e-10))(x)
     x = layers.ReLU()(x)
     x = layers.BatchNormalization()(x)
-    decoder_outputs = layers.Conv2DTranspose(2, 3, activation="sigmoid", padding="same")(x)
+    decoder_outputs = layers.Conv2DTranspose(2, 3, activation="sigmoid", padding="same", kernel_regularizer=tf.keras.regularizers.l2(10e-10))(x)
     decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
 
     vae = VAE(encoder, decoder)
@@ -196,11 +196,11 @@ def get_models_cnn(latent_dim=16, input_shape=(128, 1025, 2)):
 
 if __name__ == '__main__':
     path = '/Users/allanpichardo/Downloads/Legowelt QuasiMIDI SIRIUS Sample Pack'
-    sr = 22050
+    sr = 44100
     duration = 2.0
-    batch_size = 32
+    batch_size = 8
 
-    sequence = SoundSequence(path, sr=sr, duration=duration, batch_size=32)
+    sequence = SoundSequence(path, sr=sr, duration=duration, batch_size=batch_size)
 
     encoder, decoder, autoencoder = get_models_cnn(latent_dim=8)
     encoder.summary()
