@@ -80,7 +80,6 @@ class Sampling(layers.Layer):
         epsilon = tf.keras.backend.random_normal(shape=(batch, dim))
         return z_mean + tf.exp(0.5 * z_log_var) * epsilon
 
-
 class VAE(keras.Model):
 
     def call(self, inputs, training=None, mask=None):
@@ -109,32 +108,23 @@ class VAE(keras.Model):
             z_mean, z_log_var, z = self.encoder(stft_out)
             reconstruction = self.decoder(z)
 
-            # mae = -tf.reduce_sum(tf.losses.mae(stft_out, reconstruction))
-            # cross_ent = tf.nn.sigmoid_cross_entropy_with_logits(logits=reconstruction, labels=stft_out)
-            # logpx_z = -tf.reduce_sum(cross_ent, axis=[1, 2, 3])
-
-
             spectral_convergence_loss = tf.sqrt(
                 tf.divide(
                     tf.reduce_sum(tf.square(stft_out - reconstruction)),
                     tf.reduce_sum(tf.square(stft_out))
                 )
             )
-            #
-            logpz = self.log_normal_pdf(z, 0., 0.)
-            logqz_x = self.log_normal_pdf(z, z_mean, z_log_var)
-            total_loss = spectral_convergence_loss + tf.abs(logpz - logqz_x)
-            # total_loss = tf.reduce_mean(spectral_convergence_loss + logpz - logqz_x)
-            # kl_loss = 1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
-            # kl_loss = tf.reduce_mean(kl_loss)
-            # kl_loss *= -0.5
-            # total_loss = spectral_convergence_loss + kl_loss
+
+            kl = 0.5 * tf.reduce_sum(tf.exp(z_log_var) + tf.square(z_mean) - 1. - z_log_var, axis=1)
+
+            total_loss = spectral_convergence_loss + kl
+
         grads = tape.gradient(total_loss, self.trainable_weights)
         self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
         return {
             "loss": total_loss,
-            # "spectral_conv_loss": spectral_convergence_loss,
-            # "kl_loss": kl_loss,
+            "spectral_conv_loss": spectral_convergence_loss,
+            "kl_loss": kl,
         }
 
 
@@ -175,8 +165,8 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     x = layers.Conv2D(64, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
     x = layers.GlobalAveragePooling2D()(x)
-    z_mean = layers.Dense(latent_dim, name="z_mean", activation="tanh")(x)
-    z_log_var = layers.Dense(latent_dim, name="z_log_var", activation="tanh")(x)
+    z_mean = layers.Dense(latent_dim, name="z_mean", activation="linear")(x)
+    z_log_var = layers.Dense(latent_dim, name="z_log_var", activation="linear")(x)
     z = Sampling()([z_mean, z_log_var])
     encoder = keras.Model(img_inputs, [z_mean, z_log_var, z], name="encoder")
 
@@ -189,7 +179,7 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     x = layers.Conv2DTranspose(32, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
     x = layers.ZeroPadding2D(padding=[(0, 1), (0, 1)])(x)
-    decoder_outputs = layers.Conv2DTranspose(2, 3, activation=None, padding="same")(x)
+    decoder_outputs = layers.Conv2DTranspose(2, 3, activation="linear", padding="same")(x)
     decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
 
     vae = VAE(stft_model, encoder, decoder)
