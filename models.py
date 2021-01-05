@@ -158,8 +158,7 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     stft_model = keras.Model(encoder_inputs, stft_out, name='stft')
 
     img_inputs = keras.Input(shape=(513, 513, 2))
-    x = tf.image.per_image_standardization(img_inputs)
-    x = layers.Conv2D(32, 3, padding="same")(x)
+    x = layers.Conv2D(32, 3, padding="same")(img_inputs)
     x = layers.LeakyReLU()(x)
     x = layers.AveragePooling2D()(x)
     x = layers.Conv2D(64, 3, padding="same")(x)
