@@ -95,10 +95,11 @@ class VAE(keras.Model):
         self.encoder = encoder
         self.decoder = decoder
 
-    def pad_up_to(self, t, max_in_dims, constant_values):
-        s = tf.shape(t)
-        paddings = [[0, m - s[i]] for (i, m) in enumerate(max_in_dims)]
-        return tf.pad(t, paddings, 'CONSTANT', constant_values=constant_values)
+    def log_normal_pdf(self, sample, mean, logvar, raxis=1):
+        log2pi = tf.math.log(2. * np.pi)
+        return tf.reduce_sum(
+            -.5 * ((sample - mean) ** 2. * tf.exp(-logvar) + logvar + log2pi),
+            axis=raxis)
 
     def train_step(self, data):
         if isinstance(data, tuple):
@@ -108,23 +109,29 @@ class VAE(keras.Model):
             z_mean, z_log_var, z = self.encoder(stft_out)
             reconstruction = self.decoder(z)
 
-            spectral_convergence_loss = tf.sqrt(
-                tf.divide(
-                    tf.reduce_sum(tf.square(stft_out - reconstruction)),
-                    tf.reduce_sum(tf.square(stft_out))
-                )
-            )
+            cross_ent = tf.nn.sigmoid_cross_entropy_with_logits(logits=reconstruction, labels=stft_out)
+            logpx_z = -tf.reduce_sum(cross_ent, axis=[1, 2, 3])
+            logpz = self.log_normal_pdf(z, 0., 0.)
+            logqz_x = self.log_normal_pdf(z, z_mean, z_log_var)
+            total_loss = -tf.reduce_mean(logpx_z + logpz - logqz_x)
 
-            kl_loss = 1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
-            kl_loss = tf.reduce_mean(kl_loss)
-            kl_loss *= -0.5
-            total_loss = spectral_convergence_loss + kl_loss
+            # spectral_convergence_loss = tf.sqrt(
+            #     tf.divide(
+            #         tf.reduce_sum(tf.square(stft_out - reconstruction)),
+            #         tf.reduce_sum(tf.square(stft_out))
+            #     )
+            # )
+            #
+            # kl_loss = 1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
+            # kl_loss = tf.reduce_mean(kl_loss)
+            # kl_loss *= -0.5
+            # total_loss = spectral_convergence_loss + kl_loss
         grads = tape.gradient(total_loss, self.trainable_weights)
         self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
         return {
             "loss": total_loss,
-            "spectral_conv_loss": spectral_convergence_loss,
-            "kl_loss": kl_loss,
+            # "spectral_conv_loss": spectral_convergence_loss,
+            # "kl_loss": kl_loss,
         }
 
 
@@ -158,27 +165,27 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     stft_model = keras.Model(encoder_inputs, stft_out, name='stft')
 
     img_inputs = keras.Input(shape=(513, 513, 2))
-    x = layers.Conv2D(32, 3, padding="same", activity_regularizer=tf.keras.regularizers.l2(10e-10))(img_inputs)
+    x = layers.Conv2D(32, 3, padding="same")(img_inputs)
     x = layers.LeakyReLU()(x)
     x = layers.AveragePooling2D()(x)
-    x = layers.Conv2D(32, 3, padding="same", activity_regularizer=tf.keras.regularizers.l2(10e-10))(x)
+    x = layers.Conv2D(64, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
     x = layers.GlobalAveragePooling2D()(x)
-    z_mean = layers.Dense(latent_dim, name="z_mean", activity_regularizer=tf.keras.regularizers.l2(10e-10))(x)
-    z_log_var = layers.Dense(latent_dim, name="z_log_var", activity_regularizer=tf.keras.regularizers.l2(10e-10))(x)
+    z_mean = layers.Dense(latent_dim, name="z_mean", activation="tanh")(x)
+    z_log_var = layers.Dense(latent_dim, name="z_log_var", activation="tanh")(x)
     z = Sampling()([z_mean, z_log_var])
     encoder = keras.Model(img_inputs, [z_mean, z_log_var, z], name="encoder")
 
     latent_inputs = keras.Input(shape=(latent_dim,))
-    x = layers.Dense(256 * 256, activation="relu", activity_regularizer=tf.keras.regularizers.l2(10e-10))(latent_inputs)
+    x = layers.Dense(256 * 256, activation="relu")(latent_inputs)
     x = layers.Reshape((256, 256, 1))(x)
-    x = layers.Conv2DTranspose(32, 3, padding="same", activity_regularizer=tf.keras.regularizers.l2(10e-10))(x)
+    x = layers.Conv2DTranspose(64, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
     x = layers.UpSampling2D()(x)
-    x = layers.Conv2DTranspose(32, 3, padding="same", activity_regularizer=tf.keras.regularizers.l2(10e-10))(x)
+    x = layers.Conv2DTranspose(32, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
     x = layers.ZeroPadding2D(padding=[(0, 1), (0, 1)])(x)
-    decoder_outputs = layers.Conv2DTranspose(2, 3, activation=None, padding="same", activity_regularizer=tf.keras.regularizers.l2(10e-10))(x)
+    decoder_outputs = layers.Conv2DTranspose(2, 3, activation=None, padding="same")(x)
     decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
 
     vae = VAE(stft_model, encoder, decoder)
@@ -200,7 +207,7 @@ if __name__ == '__main__':
     autoencoder.decoder.summary()
 
     autoencoder.compile(optimizer=keras.optimizers.Adam())
-    autoencoder.fit(sequence, epochs=10)
+    autoencoder.fit(sequence, epochs=1)
 
     synth = get_synth_model(autoencoder.decoder)
     synth.summary()
