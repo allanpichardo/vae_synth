@@ -215,7 +215,7 @@ if __name__ == '__main__':
     path = os.path.join(os.path.dirname(__file__), 'samples')
     sr = 44100
     duration = 2.0
-    batch_size = 8
+    batch_size = 2
 
     sequence = SoundSequence(path, sr=sr, duration=duration, batch_size=batch_size)
 
