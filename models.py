@@ -212,7 +212,7 @@ def get_models_cnn(latent_dim=16, input_shape=(512, 1025, 2)):
 
 
 if __name__ == '__main__':
-    path = '/Users/allanpichardo/Downloads/Legowelt QuasiMIDI SIRIUS Sample Pack'
+    path = os.path.join(os.path.dirname(__file__), 'samples')
     sr = 44100
     duration = 2.0
     batch_size = 8
