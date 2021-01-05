@@ -134,6 +134,23 @@ def img_to_complex(x):
     return tf.complex(m, p)
 
 
+def get_synth_model(decoder, input_shape=(8,)):
+    inputs = keras.Input(shape=input_shape)
+    x = decoder(inputs)
+    x = stft_to_wav_model()(x)
+    return keras.Model(inputs, x, name="synth")
+
+
+def stft_to_wav_model(input_shape=(512, 1025, 2)):
+    inputs = keras.Input(shape=input_shape)
+    x = tf.multiply(tf.constant(2.0), inputs)
+    x = tf.subtract(x, 1)
+    m, p = tf.split(x, 2, 3)
+    x = tf.complex(m, p)
+    x = kapre.InverseSTFT()(x)
+    return keras.Model(inputs, x, name="InverseStft")
+
+
 def get_models_cnn(latent_dim=16, input_shape=(512, 1025, 2)):
     encoder_inputs = keras.Input(shape=input_shape)
     x = layers.Conv2D(64, 3, padding="same", kernel_regularizer=tf.keras.regularizers.l2(10e-10))(encoder_inputs)
@@ -206,10 +223,20 @@ if __name__ == '__main__':
     encoder.summary()
     decoder.summary()
 
-    # autoencoder.compile(optimizer=keras.optimizers.Adam())
-    # autoencoder.fit(sequence, epochs=10)
+    autoencoder.compile(optimizer=keras.optimizers.Adam())
+    autoencoder.fit(sequence, epochs=20)
 
-    # Y = autoencoder.predict_on_batch([y])
+    synth = get_synth_model(autoencoder.decoder)
+    synth.summary()
+
+    random = tf.constant(np.random.random(8), shape=(1, 8,))
+    wav = synth.predict_on_batch(random)
+    wav = librosa.util.normalize(wav[0])
+
+    wav = tf.audio.encode_wav(wav, sr)
+    tf.io.write_file('output.wav', wav)
+
+
 
     # for y in Y:
     #     wav = tf.audio.encode_wav(y, sr)
