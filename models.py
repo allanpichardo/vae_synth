@@ -48,10 +48,7 @@ class SoundSequence(tf.keras.utils.Sequence):
             wav = tf.convert_to_tensor(wav)
             wav = tf.expand_dims(wav, 1)
             wav = self.pad_up_to(wav, [rate * int(self.duration), 1], 0)
-            img = self.stft_func(tf.stack([wav]))
-            img = ((img - tf.reduce_min(img)) / (tf.reduce_max(img) - tf.reduce_min(img)))
-            padded = tf.image.resize_with_crop_or_pad(img, 512, 1025)
-            X.append(tf.squeeze(padded, 0))
+            X.append(wav)
             Y.append(tf.convert_to_tensor(label))
 
         X = tf.stack(X)
@@ -87,12 +84,14 @@ class Sampling(layers.Layer):
 class VAE(keras.Model):
 
     def call(self, inputs, training=None, mask=None):
-        u, v, z = self.encoder(inputs)
+        spec = self.stft(inputs)
+        u, v, z = self.encoder(spec)
         y_pred = self.decoder(z)
         return y_pred
 
-    def __init__(self, encoder, decoder, **kwargs):
+    def __init__(self, stft, encoder, decoder, **kwargs):
         super(VAE, self).__init__(**kwargs)
+        self.stft = stft
         self.encoder = encoder
         self.decoder = decoder
 
@@ -105,14 +104,14 @@ class VAE(keras.Model):
         if isinstance(data, tuple):
             data = data[0]
         with tf.GradientTape() as tape:
-            z_mean, z_log_var, z = self.encoder(data)
+            stft_out = self.stft(data)
+            z_mean, z_log_var, z = self.encoder(stft_out)
             reconstruction = self.decoder(z)
-            mag_true, _ = tf.split(data, 2, 3)
-            mag_pred, _ = tf.split(reconstruction, 2, 3)
+
             spectral_convergence_loss = tf.sqrt(
                 tf.divide(
-                    tf.reduce_sum(tf.square(mag_true - mag_pred)),
-                    tf.reduce_sum(tf.square(mag_true))
+                    tf.reduce_sum(tf.square(stft_out - reconstruction)),
+                    tf.reduce_sum(tf.square(stft_out))
                 )
             )
 
@@ -151,9 +150,15 @@ def stft_to_wav_model(input_shape=(512, 1025, 2)):
     return keras.Model(inputs, x, name="InverseStft")
 
 
-def get_models_cnn(latent_dim=16, input_shape=(512, 1025, 2)):
+def get_model(latent_dim=8, sr=44100, duration=3.0):
+    input_shape = (int(sr * duration), 1)
     encoder_inputs = keras.Input(shape=input_shape)
-    x = layers.Conv2D(64, 3, padding="same", kernel_regularizer=tf.keras.regularizers.l2(10e-10))(encoder_inputs)
+    x = kapre.composed.get_stft_mag_phase(input_shape=input_shape)(encoder_inputs)
+    stft_out = tf.image.resize_with_crop_or_pad(x, 512, 1025)
+    stft_model = keras.Model(encoder_inputs, stft_out, name='stft')
+
+    img_inputs = keras.Input(shape=(512, 1025, 2))
+    x = layers.Conv2D(64, 3, padding="same", kernel_regularizer=tf.keras.regularizers.l2(10e-10))(img_inputs)
     x = layers.ReLU()(x)
     x = layers.BatchNormalization()(x)
     x = layers.AveragePooling2D()(x)
@@ -177,7 +182,7 @@ def get_models_cnn(latent_dim=16, input_shape=(512, 1025, 2)):
     z_mean = layers.Dense(latent_dim, name="z_mean", kernel_regularizer=tf.keras.regularizers.l2(10e-10))(x)
     z_log_var = layers.Dense(latent_dim, name="z_log_var", kernel_regularizer=tf.keras.regularizers.l2(10e-10))(x)
     z = Sampling()([z_mean, z_log_var])
-    encoder = keras.Model(encoder_inputs, [z_mean, z_log_var, z], name="encoder")
+    encoder = keras.Model(img_inputs, [z_mean, z_log_var, z], name="encoder")
 
     latent_inputs = keras.Input(shape=(latent_dim,))
     x = layers.Dense(2048, activation="relu", kernel_regularizer=tf.keras.regularizers.l2(10e-10))(latent_inputs)
@@ -203,28 +208,29 @@ def get_models_cnn(latent_dim=16, input_shape=(512, 1025, 2)):
     x = layers.Conv2DTranspose(64, 3, padding="same", kernel_regularizer=tf.keras.regularizers.l2(10e-10))(x)
     x = layers.ReLU()(x)
     x = layers.BatchNormalization()(x)
-    decoder_outputs = layers.Conv2DTranspose(2, 3, activation="relu", padding="same", kernel_regularizer=tf.keras.regularizers.l2(10e-10))(x)
+    decoder_outputs = layers.Conv2DTranspose(2, 3, activation=None, padding="same", kernel_regularizer=tf.keras.regularizers.l2(10e-10))(x)
     decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
 
-    vae = VAE(encoder, decoder)
+    vae = VAE(stft_model, encoder, decoder)
 
-    return encoder, decoder, vae
+    return vae
 
 
 if __name__ == '__main__':
     path = os.path.join(os.path.dirname(__file__), 'samples')
     sr = 44100
-    duration = 2.0
-    batch_size = 2
+    duration = 6.0
+    batch_size = 4
 
     sequence = SoundSequence(path, sr=sr, duration=duration, batch_size=batch_size)
 
-    encoder, decoder, autoencoder = get_models_cnn(latent_dim=8)
-    encoder.summary()
-    decoder.summary()
+    autoencoder = get_model(latent_dim=8, sr=sr, duration=duration)
+    autoencoder.stft.summary()
+    autoencoder.encoder.summary()
+    autoencoder.decoder.summary()
 
     autoencoder.compile(optimizer=keras.optimizers.Adam())
-    autoencoder.fit(sequence, epochs=20)
+    autoencoder.fit(sequence, epochs=10)
 
     synth = get_synth_model(autoencoder.decoder)
     synth.summary()
@@ -235,9 +241,3 @@ if __name__ == '__main__':
 
     wav = tf.audio.encode_wav(wav, sr)
     tf.io.write_file('output.wav', wav)
-
-
-
-    # for y in Y:
-    #     wav = tf.audio.encode_wav(y, sr)
-    #     tf.io.write_file('output.wav', wav)
