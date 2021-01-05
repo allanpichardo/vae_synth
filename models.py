@@ -109,19 +109,22 @@ class VAE(keras.Model):
             z_mean, z_log_var, z = self.encoder(stft_out)
             reconstruction = self.decoder(z)
 
-            cross_ent = tf.nn.sigmoid_cross_entropy_with_logits(logits=reconstruction, labels=stft_out)
-            logpx_z = -tf.reduce_sum(cross_ent, axis=[1, 2, 3])
+            # mae = -tf.reduce_sum(tf.losses.mae(stft_out, reconstruction))
+            # cross_ent = tf.nn.sigmoid_cross_entropy_with_logits(logits=reconstruction, labels=stft_out)
+            # logpx_z = -tf.reduce_sum(cross_ent, axis=[1, 2, 3])
+
+
+            spectral_convergence_loss = tf.sqrt(
+                tf.divide(
+                    tf.reduce_sum(tf.square(stft_out - reconstruction)),
+                    tf.reduce_sum(tf.square(stft_out))
+                )
+            )
+            #
             logpz = self.log_normal_pdf(z, 0., 0.)
             logqz_x = self.log_normal_pdf(z, z_mean, z_log_var)
-            total_loss = -tf.reduce_mean(logpx_z + logpz - logqz_x)
-
-            # spectral_convergence_loss = tf.sqrt(
-            #     tf.divide(
-            #         tf.reduce_sum(tf.square(stft_out - reconstruction)),
-            #         tf.reduce_sum(tf.square(stft_out))
-            #     )
-            # )
-            #
+            total_loss = spectral_convergence_loss + tf.abs(logpz - logqz_x)
+            # total_loss = tf.reduce_mean(spectral_convergence_loss + logpz - logqz_x)
             # kl_loss = 1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var)
             # kl_loss = tf.reduce_mean(kl_loss)
             # kl_loss *= -0.5
@@ -165,7 +168,8 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     stft_model = keras.Model(encoder_inputs, stft_out, name='stft')
 
     img_inputs = keras.Input(shape=(513, 513, 2))
-    x = layers.Conv2D(32, 3, padding="same")(img_inputs)
+    x = tf.image.per_image_standardization(img_inputs)
+    x = layers.Conv2D(32, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
     x = layers.AveragePooling2D()(x)
     x = layers.Conv2D(64, 3, padding="same")(x)
