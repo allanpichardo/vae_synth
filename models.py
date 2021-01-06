@@ -7,8 +7,6 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
-import tensorflow_io as tfio
-import random
 
 
 class SoundSequence(tf.keras.utils.Sequence):
