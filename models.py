@@ -48,6 +48,7 @@ class SoundSequence(tf.keras.utils.Sequence):
             speed = random.uniform(0.25, 2.0)
             wav, rate = librosa.load(path, sr=self.sr, duration=self.duration, res_type='kaiser_fast')
             wav = librosa.effects.time_stretch(wav, speed)
+            wav = wav[:rate * int(self.duration)]
             wav = tf.convert_to_tensor(wav)
             wav = tf.expand_dims(wav, 1)
             wav = self.pad_up_to(wav, [rate * int(self.duration), 1], 0)
