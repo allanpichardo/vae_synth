@@ -105,8 +105,8 @@ class VAE(keras.Model):
 
             spectral_convergence_loss = tf.sqrt(
                 tf.divide(
-                    tf.reduce_sum(tf.square(stft_out - reconstruction), axis=[1, 2, 3]),
-                    tf.reduce_sum(tf.square(stft_out), axis=[1, 2, 3])
+                    tf.reduce_sum(tf.square(stft_out - reconstruction)),
+                    tf.reduce_sum(tf.square(stft_out))
                 )
             )
 
