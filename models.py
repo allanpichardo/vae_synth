@@ -57,7 +57,7 @@ class SoundSequence(tf.keras.utils.Sequence):
         return X, Y
 
     def __len__(self):
-        return int(np.ceil(len(self.wav_paths) / float(self.batch_size)))
+        return int(np.floor(len(self.wav_paths) / float(self.batch_size)))
 
     def pad_up_to(self, t, max_in_dims, constant_values):
         s = tf.shape(t)
@@ -94,12 +94,6 @@ class VAE(keras.Model):
         self.encoder = encoder
         self.decoder = decoder
 
-    def log_normal_pdf(self, sample, mean, logvar, raxis=1):
-        log2pi = tf.math.log(2. * np.pi)
-        return tf.reduce_sum(
-            -.5 * ((sample - mean) ** 2. * tf.exp(-logvar) + logvar + log2pi),
-            axis=raxis)
-
     def train_step(self, data):
         if isinstance(data, tuple):
             data = data[0]
@@ -110,8 +104,8 @@ class VAE(keras.Model):
 
             spectral_convergence_loss = tf.sqrt(
                 tf.divide(
-                    tf.reduce_sum(tf.square(stft_out - reconstruction)),
-                    tf.reduce_sum(tf.square(stft_out))
+                    tf.reduce_sum(tf.square(stft_out - reconstruction), axis=[1, 2, 3]),
+                    tf.reduce_sum(tf.square(stft_out), axis=[1, 2, 3])
                 )
             )
 
@@ -142,9 +136,9 @@ def get_synth_model(decoder, input_shape=(8,)):
 
 def stft_to_wav_model(input_shape=(513, 513, 2)):
     inputs = keras.Input(shape=input_shape)
-    x = tf.multiply(tf.constant(2.0), inputs)
-    x = tf.subtract(x, 1)
-    m, p = tf.split(x, 2, 3)
+    # x = tf.multiply(tf.constant(2.0), inputs)
+    # x = tf.subtract(x, 1)
+    m, p = tf.split(input_shape, 2, 3)
     x = tf.complex(m, p)
     x = kapre.InverseSTFT(n_fft=1024)(x)
     return keras.Model(inputs, x, name="InverseStft")
@@ -200,14 +194,17 @@ if __name__ == '__main__':
     autoencoder.decoder.summary()
 
     autoencoder.compile(optimizer=keras.optimizers.Adam())
-    autoencoder.fit(sequence, epochs=1)
+    autoencoder.fit(sequence, epochs=1, use_multiprocessing=True, workers=4)
 
     synth = get_synth_model(autoencoder.decoder)
     synth.summary()
 
-    random = tf.constant(np.random.random(8), shape=(1, 8,))
-    wav = synth.predict_on_batch(random)
-    wav = librosa.util.normalize(wav[0])
+    random = tf.random.normal([5, 8])
+    wavs = synth.predict_on_batch(random)
 
-    wav = tf.audio.encode_wav(wav, sr)
-    tf.io.write_file('output.wav', wav)
+    i = 0
+    for wav in wavs:
+        wav = librosa.util.normalize(wav)
+        wav = tf.audio.encode_wav(wav, sr)
+        tf.io.write_file('output-{}.wav'.format(i), wav)
+        i = i + 1
