@@ -126,15 +126,8 @@ class VAE(keras.Model):
 def get_synth_model(decoder, input_shape=(8,)):
     inputs = keras.Input(shape=input_shape)
     x = decoder(inputs)
-    x = stft_to_wav_model()(x)
+    x = layers.Lambda(spectrogram2wav)(x)
     return keras.Model(inputs, x, name="synth")
-
-
-def stft_to_wav_model(input_shape=(513, 513, 1)):
-    inputs = keras.Input(shape=input_shape)
-    x = spectrogram2wav(inputs)
-    x = tf.transpose(x)
-    return keras.Model(inputs, x, name="spec2wav")
 
 
 def spectrogram2wav(spectrogram, n_iter=60, n_fft=1024,
@@ -153,7 +146,7 @@ def spectrogram2wav(spectrogram, n_iter=60, n_fft=1024,
         X_best = spectrogram * phase  # [t, t]
     X_t = tf.signal.inverse_stft(X_best, win_length, hop_length, n_fft)
     y = tf.math.real(X_t)
-    y = tf.transpose(y, perm=(1, 2, 0))
+    y = tf.transpose(y, perm=(0, 2, 1))
     return y
 
 
@@ -170,10 +163,13 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     x = layers.TimeDistributed(layers.Conv1D(32, 3, padding="same"))(img_inputs)
     x = layers.ReLU()(x)
     x = layers.AveragePooling2D()(x)
+    x = layers.TimeDistributed(layers.Conv1D(32, 3, padding="same"))(x)
+    x = layers.ReLU()(x)
+    x = layers.AveragePooling2D()(x)
     x = layers.TimeDistributed(layers.Conv1D(64, 3, padding="same"))(x)
     x = layers.ReLU()(x)
     x = layers.AveragePooling2D()(x)
-    x = layers.TimeDistributed(layers.Conv1D(128, 3, padding="same"))(x)
+    x = layers.TimeDistributed(layers.Conv1D(64, 3, padding="same"))(x)
     x = layers.TimeDistributed(layers.Conv1D(1, 3, padding="same"))(x)
     x = layers.ReLU()(x)
     x = layers.Flatten()(x)
@@ -183,12 +179,15 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     encoder = keras.Model(img_inputs, [z_mean, z_log_var, z], name="encoder")
 
     latent_inputs = keras.Input(shape=(latent_dim,))
-    x = layers.Dense(128 * 128, activation="relu")(latent_inputs)
-    x = layers.Reshape((128, 128, 1))(x)
-    x = layers.TimeDistributed(layers.Conv1DTranspose(128, 3, padding="same"))(x)
+    x = layers.Dense(64 * 64, activation="relu")(latent_inputs)
+    x = layers.Reshape((64, 64, 1))(x)
+    x = layers.TimeDistributed(layers.Conv1DTranspose(64, 3, padding="same"))(x)
     x = layers.ReLU()(x)
     x = layers.UpSampling2D()(x)
     x = layers.TimeDistributed(layers.Conv1DTranspose(64, 3, padding="same"))(x)
+    x = layers.ReLU()(x)
+    x = layers.UpSampling2D()(x)
+    x = layers.TimeDistributed(layers.Conv1DTranspose(32, 3, padding="same"))(x)
     x = layers.ReLU()(x)
     x = layers.UpSampling2D()(x)
     x = layers.ZeroPadding2D(padding=[(0, 1), (0, 1)])(x)
@@ -239,7 +238,7 @@ if __name__ == '__main__':
     # tf.io.write_file('reproduction.wav', repro)
 
     autoencoder.compile(optimizer=keras.optimizers.Adam())
-    autoencoder.fit(sequence, epochs=10)
+    # autoencoder.fit(sequence, epochs=1)
 
     synth = get_synth_model(autoencoder.decoder)
     synth.summary()
