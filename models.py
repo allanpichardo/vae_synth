@@ -5,6 +5,7 @@ import kapre
 import librosa
 import numpy as np
 import tensorflow as tf
+import tensorflow_io as tfio
 from tensorflow import keras
 from tensorflow.keras import layers
 import random
@@ -45,8 +46,9 @@ class SoundSequence(tf.keras.utils.Sequence):
         Y = []
 
         for i, (path, label) in enumerate(zip(wav_paths, labels)):
+            speed = random.uniform(0.25, 2.0)
             wav, rate = librosa.load(path, sr=self.sr, duration=self.duration, res_type='kaiser_fast')
-            wav = librosa.effects.pitch_shift(wav, rate, n_steps=float(random.randint(-12, 12)), res_type='kaiser_fast')
+            wav = librosa.effects.time_stretch(wav, speed)
             wav = tf.convert_to_tensor(wav)
             wav = tf.expand_dims(wav, 1)
             wav = self.pad_up_to(wav, [rate * int(self.duration), 1], 0)
