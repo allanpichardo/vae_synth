@@ -80,6 +80,7 @@ class Sampling(layers.Layer):
         epsilon = tf.keras.backend.random_normal(shape=(batch, dim))
         return z_mean + tf.exp(0.5 * z_log_var) * epsilon
 
+
 class VAE(keras.Model):
 
     def call(self, inputs, training=None, mask=None):
@@ -122,11 +123,6 @@ class VAE(keras.Model):
         }
 
 
-def img_to_complex(x):
-    m, p = tf.split(x, 2, axis=3)
-    return tf.complex(m, p)
-
-
 def get_synth_model(decoder, input_shape=(8,)):
     inputs = keras.Input(shape=input_shape)
     x = decoder(inputs)
@@ -134,20 +130,48 @@ def get_synth_model(decoder, input_shape=(8,)):
     return keras.Model(inputs, x, name="synth")
 
 
-def stft_to_wav_model(input_shape=(513, 513, 2)):
+def stft_to_wav_model(input_shape=(513, 513, 1)):
     inputs = keras.Input(shape=input_shape)
-    # x = tf.multiply(tf.constant(2.0), inputs)
-    # x = tf.subtract(x, 1)
-    m, p = tf.split(input_shape, 2, 3)
-    x = tf.complex(m, p)
-    x = kapre.InverseSTFT(n_fft=1024)(x)
+    x = spectrogram2wav(inputs)
+    x = tf.transpose(x)
     return keras.Model(inputs, x, name="InverseStft")
+
+
+def spectrogram2wav(spectrogram, n_iter=60, n_fft=1024,
+                    win_length=1024,
+                    hop_length=1024 // 4):
+    '''Converts spectrogram into a waveform using Griffin-lim's raw.
+    '''
+
+    def invert_spectrogram(spectrogram):
+        '''
+        spectrogram: [t, f]
+        '''
+        # spectrogram = tf.expand_dims(spectrogram, 0)
+        inversed = tf.signal.inverse_stft(spectrogram, win_length, hop_length, n_fft)
+        # squeezed = tf.squeeze(inversed, 0)
+        return inversed
+
+    spectrogram = tf.transpose(spectrogram, perm=(0, 3, 1, 2))
+
+    spectrogram = tf.cast(spectrogram, dtype=tf.complex64)  # [t, f]
+    X_best = tf.identity(spectrogram)
+    for i in range(n_iter):
+        X_t = invert_spectrogram(X_best)
+        est = tf.signal.stft(X_t, win_length, hop_length, n_fft, pad_end=False)  # (1, T, n_fft/2+1)
+        phase = est / tf.cast(tf.maximum(1e-8, tf.abs(est)), tf.complex64)  # [t, f]
+        X_best = spectrogram * phase  # [t, t]
+    X_t = invert_spectrogram(X_best)
+    y = tf.math.real(X_t)
+
+    return tf.transpose(y, perm=(0, 2, 1))
 
 
 def get_model(latent_dim=8, sr=44100, duration=3.0):
     input_shape = (int(sr * duration), 1)
     encoder_inputs = keras.Input(shape=input_shape)
-    x = kapre.composed.get_stft_mag_phase(input_shape=input_shape, n_fft=1024)(encoder_inputs)
+    x = kapre.STFT(input_shape=input_shape, n_fft=1024)(encoder_inputs)
+    x = kapre.Magnitude()(x)
     stft_out = tf.image.resize_with_crop_or_pad(x, 513, 513)
     stft_model = keras.Model(encoder_inputs, stft_out, name='stft')
 
@@ -169,15 +193,21 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     x = layers.Conv2DTranspose(64, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
     x = layers.UpSampling2D()(x)
+    x = layers.ZeroPadding2D(padding=[(0, 1), (0, 1)])(x)
     x = layers.Conv2DTranspose(32, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
-    x = layers.ZeroPadding2D(padding=[(0, 1), (0, 1)])(x)
-    decoder_outputs = layers.Conv2DTranspose(2, 3, activation="linear", padding="same")(x)
+    decoder_outputs = layers.Conv2DTranspose(1, 3, activation="linear", padding="same")(x)
     decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
 
     vae = VAE(stft_model, encoder, decoder)
 
     return vae
+
+
+def pad_up_to(t, max_in_dims, constant_values):
+    s = tf.shape(t)
+    paddings = [[0, m - s[i]] for (i, m) in enumerate(max_in_dims)]
+    return tf.pad(t, paddings, 'CONSTANT', constant_values=constant_values)
 
 
 if __name__ == '__main__':
@@ -186,22 +216,37 @@ if __name__ == '__main__':
     duration = 3.0
     batch_size = 4
 
-    sequence = SoundSequence(path, sr=sr, duration=duration, batch_size=batch_size)
+    # sequence = SoundSequence(path, sr=sr, duration=duration, batch_size=batch_size)
 
     autoencoder = get_model(latent_dim=8, sr=sr, duration=duration)
     autoencoder.stft.summary()
     autoencoder.encoder.summary()
     autoencoder.decoder.summary()
 
+    # wav, rate = librosa.load('/Users/allanpichardo/PycharmProjects/audio-generation-autoencoder/FX-Robotio.wav', sr=sr,
+    #                          duration=duration)
+    # wav = tf.convert_to_tensor(wav)
+    # wav = tf.expand_dims(wav, axis=1)
+    # wav = pad_up_to(wav, [int(duration * sr), 1], 0)
+    # wav = tf.expand_dims(wav, axis=0)
+    # stft = autoencoder.stft(wav)
+    # # stft = tf.image.per_image_standardization(stft)
+    # # repro = stft_to_wav_model()(stft)
+    # repro = spectrogram2wav(stft[0])
+    # repro = tf.transpose(repro)
+    # repro = librosa.util.normalize(repro)
+    # repro = tf.audio.encode_wav(repro, 44100)
+    # tf.io.write_file('reproduction.wav', repro)
+
     autoencoder.compile(optimizer=keras.optimizers.Adam())
-    autoencoder.fit(sequence, epochs=50)
+    # autoencoder.fit(sequence, epochs=50)
 
     synth = get_synth_model(autoencoder.decoder)
     synth.summary()
-
+    #
     random = tf.random.normal([5, 8])
     wavs = synth.predict_on_batch(random)
-
+    #
     i = 0
     for wav in wavs:
         wav = librosa.util.normalize(wav)
