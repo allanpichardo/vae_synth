@@ -194,7 +194,7 @@ if __name__ == '__main__':
     autoencoder.decoder.summary()
 
     autoencoder.compile(optimizer=keras.optimizers.Adam())
-    autoencoder.fit(sequence, epochs=1, use_multiprocessing=True, workers=4)
+    autoencoder.fit(sequence, epochs=50)
 
     synth = get_synth_model(autoencoder.decoder)
     synth.summary()
