@@ -7,6 +7,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
+import tensorflow_io as tfio
 import random
 
 
@@ -45,10 +46,10 @@ class SoundSequence(tf.keras.utils.Sequence):
         Y = []
 
         for i, (path, label) in enumerate(zip(wav_paths, labels)):
-            speed = random.uniform(0.25, 2.0)
+            # speed = random.uniform(0.25, 2.0)
             wav, rate = librosa.load(path, sr=self.sr, duration=self.duration, res_type='kaiser_fast')
-            wav = librosa.effects.time_stretch(wav, speed)
-            wav = wav[:rate * int(self.duration)]
+            # wav = librosa.effects.time_stretch(wav, speed)
+            # wav = wav[:rate * int(self.duration)]
             wav = tf.convert_to_tensor(wav)
             wav = tf.expand_dims(wav, 1)
             wav = self.pad_up_to(wav, [rate * int(self.duration), 1], 0)
@@ -160,6 +161,8 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     x = kapre.STFT(input_shape=input_shape, n_fft=1024)(encoder_inputs)
     x = kapre.Magnitude()(x)
     x = layers.Lambda(lambda m: (m - tf.reduce_min(m)) / (tf.reduce_max(m) - tf.reduce_min(m)))(x)
+    x = layers.experimental.preprocessing.RandomFlip()(x)
+    x = layers.experimental.preprocessing.RandomTranslation(0.1, 0.1)(x)
     stft_out = layers.Lambda(lambda m: tf.image.resize_with_crop_or_pad(m, 513, 513))(x)
     stft_model = keras.Model(encoder_inputs, stft_out, name='stft')
 
