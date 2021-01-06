@@ -155,8 +155,8 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     encoder_inputs = keras.Input(shape=input_shape)
     x = kapre.STFT(input_shape=input_shape, n_fft=1024)(encoder_inputs)
     x = kapre.Magnitude()(x)
-    x = (x - tf.reduce_min(x)) / (tf.reduce_max(x) - tf.reduce_min(x))
-    stft_out = tf.image.resize_with_crop_or_pad(x, 513, 513)
+    x = layers.Lambda(lambda m: (m - tf.reduce_min(m)) / (tf.reduce_max(m) - tf.reduce_min(m)))(x)
+    stft_out = layers.Lambda(lambda m: tf.image.resize_with_crop_or_pad(m, 513, 513))(x)
     stft_model = keras.Model(encoder_inputs, stft_out, name='stft')
 
     img_inputs = keras.Input(shape=(513, 513, 1))
@@ -240,7 +240,7 @@ if __name__ == '__main__':
 
     autoencoder.compile(optimizer=keras.optimizers.Adam(learning_rate=0.0005))
     autoencoder.fit(sequence, epochs=25)
-    autoencoder.save(model_path, save_format='tf')
+    autoencoder.save(model_path, save_format='tf', include_optimizer=False)
 
     synth = get_synth_model(autoencoder.decoder)
     synth.summary()
