@@ -208,7 +208,7 @@ def pad_up_to(t, max_in_dims, constant_values):
 
 
 if __name__ == '__main__':
-    model_path = os.path.join(os.path.dirname(__file__), 'synth_v{}.tf'.format(1))
+    model_path = os.path.join(os.path.dirname(__file__), 'synth_v{}.h5'.format(1))
     path = os.path.join(os.path.dirname(__file__), 'samples')
     sr = 44100
     duration = 3.0
@@ -240,7 +240,7 @@ if __name__ == '__main__':
 
     autoencoder.compile(optimizer=keras.optimizers.Adam(learning_rate=0.0005))
     autoencoder.fit(sequence, epochs=25)
-    autoencoder.save(model_path, save_format='tf', include_optimizer=False)
+    autoencoder.save(model_path, save_format='h5', include_optimizer=False)
 
     synth = get_synth_model(autoencoder.decoder)
     synth.summary()
