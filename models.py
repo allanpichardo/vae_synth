@@ -119,22 +119,22 @@ class VAE(keras.Model):
             z_mean, z_log_var, z = self.encoder(stft_out)
             reconstruction = self.decoder(z)
 
-            # spectral_convergence_loss = tf.sqrt(
-            #     tf.divide(
-            #         tf.reduce_sum(tf.square(stft_out - reconstruction)),
-            #         tf.reduce_sum(tf.square(stft_out))
-            #     )
-            # )
+            reconstruction_loss = tf.sqrt(
+                tf.divide(
+                    tf.reduce_sum(tf.square(stft_out - reconstruction)),
+                    tf.reduce_sum(tf.square(stft_out))
+                )
+            )
             #
             # kl = 0.5 * tf.reduce_sum(tf.exp(z_log_var) + tf.square(z_mean) - 1. - z_log_var, axis=1)
             #
             # total_loss = spectral_convergence_loss + kl
 
-            reconstruction_loss = tf.reduce_mean(
-                tf.reduce_sum(
-                    keras.losses.binary_crossentropy(stft_out, reconstruction), axis=(1, 2)
-                )
-            )
+            # reconstruction_loss = tf.reduce_mean(
+            #     tf.reduce_sum(
+            #         keras.losses.mae(stft_out, reconstruction), axis=(1, 2)
+            #     )
+            # )
             kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
             kl_loss = tf.reduce_mean(tf.reduce_sum(kl_loss, axis=1))
             total_loss = reconstruction_loss + kl_loss
@@ -281,7 +281,7 @@ if __name__ == '__main__':
     # tf.io.write_file('reproduction.wav', repro)
 
     autoencoder.compile(optimizer=keras.optimizers.Adam(learning_rate=0.0005))
-    autoencoder.fit(sequence, epochs=1000)
+    autoencoder.fit(sequence, epochs=100)
 
     if not os.path.exists(os.path.join(os.path.dirname(__file__), 'models')):
         os.makedirs(os.path.join(os.path.dirname(__file__), 'models'), exist_ok=True)
