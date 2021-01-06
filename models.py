@@ -184,8 +184,6 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     x = kapre.STFT(input_shape=input_shape, n_fft=1024)(encoder_inputs)
     x = kapre.Magnitude()(x)
     x = layers.Lambda(lambda m: (m - tf.reduce_min(m)) / (tf.reduce_max(m) - tf.reduce_min(m)))(x)
-    x = layers.experimental.preprocessing.RandomFlip()(x)
-    x = layers.experimental.preprocessing.RandomTranslation(0.1, 0.1)(x)
     stft_out = layers.Lambda(lambda m: tf.image.resize_with_crop_or_pad(m, 513, 513))(x)
     stft_model = keras.Model(encoder_inputs, stft_out, name='stft')
 
