@@ -208,6 +208,7 @@ def pad_up_to(t, max_in_dims, constant_values):
 
 
 if __name__ == '__main__':
+    model_path = os.path.join(os.path.dirname(__file__), 'synth_v{}.tf'.format(1))
     path = os.path.join(os.path.dirname(__file__), 'samples')
     sr = 44100
     duration = 3.0
@@ -215,7 +216,7 @@ if __name__ == '__main__':
 
     sequence = SoundSequence(path, sr=sr, duration=duration, batch_size=batch_size)
 
-    autoencoder = get_model(latent_dim=8, sr=sr, duration=duration)
+    autoencoder = get_model(latent_dim=8, sr=sr, duration=duration) if not os.path.exists(model_path) else tf.keras.models.load_model(model_path, compile=False)
     autoencoder.stft.summary()
     autoencoder.encoder.summary()
     autoencoder.decoder.summary()
@@ -237,8 +238,9 @@ if __name__ == '__main__':
     # repro = tf.audio.encode_wav(repro, 44100)
     # tf.io.write_file('reproduction.wav', repro)
 
-    autoencoder.compile(optimizer=keras.optimizers.Adam())
-    autoencoder.fit(sequence, epochs=1)
+    autoencoder.compile(optimizer=keras.optimizers.Adam(learning_rate=0.0005))
+    autoencoder.fit(sequence, epochs=25)
+    autoencoder.save(model_path, save_format='tf')
 
     synth = get_synth_model(autoencoder.decoder)
     synth.summary()
