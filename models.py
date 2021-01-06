@@ -134,7 +134,7 @@ def stft_to_wav_model(input_shape=(513, 513, 1)):
     inputs = keras.Input(shape=input_shape)
     x = spectrogram2wav(inputs)
     x = tf.transpose(x)
-    return keras.Model(inputs, x, name="InverseStft")
+    return keras.Model(inputs, x, name="spec2wav")
 
 
 def spectrogram2wav(spectrogram, n_iter=60, n_fft=1024,
@@ -142,29 +142,19 @@ def spectrogram2wav(spectrogram, n_iter=60, n_fft=1024,
                     hop_length=1024 // 4):
     '''Converts spectrogram into a waveform using Griffin-lim's raw.
     '''
-
-    def invert_spectrogram(spectrogram):
-        '''
-        spectrogram: [t, f]
-        '''
-        # spectrogram = tf.expand_dims(spectrogram, 0)
-        inversed = tf.signal.inverse_stft(spectrogram, win_length, hop_length, n_fft)
-        # squeezed = tf.squeeze(inversed, 0)
-        return inversed
-
     spectrogram = tf.transpose(spectrogram, perm=(0, 3, 1, 2))
 
     spectrogram = tf.cast(spectrogram, dtype=tf.complex64)  # [t, f]
     X_best = tf.identity(spectrogram)
     for i in range(n_iter):
-        X_t = invert_spectrogram(X_best)
+        X_t = tf.signal.inverse_stft(X_best, win_length, hop_length, n_fft)
         est = tf.signal.stft(X_t, win_length, hop_length, n_fft, pad_end=False)  # (1, T, n_fft/2+1)
         phase = est / tf.cast(tf.maximum(1e-8, tf.abs(est)), tf.complex64)  # [t, f]
         X_best = spectrogram * phase  # [t, t]
-    X_t = invert_spectrogram(X_best)
+    X_t = tf.signal.inverse_stft(X_best, win_length, hop_length, n_fft)
     y = tf.math.real(X_t)
-
-    return tf.transpose(y, perm=(0, 2, 1))
+    y = tf.transpose(y, perm=(1, 2, 0))
+    return y
 
 
 def get_model(latent_dim=8, sr=44100, duration=3.0):
@@ -172,15 +162,16 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     encoder_inputs = keras.Input(shape=input_shape)
     x = kapre.STFT(input_shape=input_shape, n_fft=1024)(encoder_inputs)
     x = kapre.Magnitude()(x)
+    x = (x - tf.reduce_min(x)) / (tf.reduce_max(x) - tf.reduce_min(x))
     stft_out = tf.image.resize_with_crop_or_pad(x, 513, 513)
     stft_model = keras.Model(encoder_inputs, stft_out, name='stft')
 
-    img_inputs = keras.Input(shape=(513, 513, 2))
+    img_inputs = keras.Input(shape=(513, 513, 1))
     x = layers.Conv2D(32, 3, padding="same")(img_inputs)
-    x = layers.LeakyReLU()(x)
+    x = layers.ReLU()(x)
     x = layers.AveragePooling2D()(x)
     x = layers.Conv2D(64, 3, padding="same")(x)
-    x = layers.LeakyReLU()(x)
+    x = layers.ReLU()(x)
     x = layers.GlobalAveragePooling2D()(x)
     z_mean = layers.Dense(latent_dim, name="z_mean", activation="linear")(x)
     z_log_var = layers.Dense(latent_dim, name="z_log_var", activation="linear")(x)
@@ -191,12 +182,12 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     x = layers.Dense(256 * 256, activation="relu")(latent_inputs)
     x = layers.Reshape((256, 256, 1))(x)
     x = layers.Conv2DTranspose(64, 3, padding="same")(x)
-    x = layers.LeakyReLU()(x)
+    x = layers.ReLU()(x)
     x = layers.UpSampling2D()(x)
     x = layers.ZeroPadding2D(padding=[(0, 1), (0, 1)])(x)
     x = layers.Conv2DTranspose(32, 3, padding="same")(x)
-    x = layers.LeakyReLU()(x)
-    decoder_outputs = layers.Conv2DTranspose(1, 3, activation="linear", padding="same")(x)
+    x = layers.ReLU()(x)
+    decoder_outputs = layers.Conv2DTranspose(1, 3, activation="sigmoid", padding="same")(x)
     decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
 
     vae = VAE(stft_model, encoder, decoder)
@@ -216,7 +207,7 @@ if __name__ == '__main__':
     duration = 3.0
     batch_size = 4
 
-    # sequence = SoundSequence(path, sr=sr, duration=duration, batch_size=batch_size)
+    sequence = SoundSequence(path, sr=sr, duration=duration, batch_size=batch_size)
 
     autoencoder = get_model(latent_dim=8, sr=sr, duration=duration)
     autoencoder.stft.summary()
@@ -231,22 +222,24 @@ if __name__ == '__main__':
     # wav = tf.expand_dims(wav, axis=0)
     # stft = autoencoder.stft(wav)
     # # stft = tf.image.per_image_standardization(stft)
+    # stft = (stft - tf.reduce_min(stft)) / (tf.reduce_max(stft) - tf.reduce_min(stft))
     # # repro = stft_to_wav_model()(stft)
-    # repro = spectrogram2wav(stft[0])
-    # repro = tf.transpose(repro)
+    # repro = spectrogram2wav(stft)
+    # # repro = tf.transpose(repro)
+    # repro = repro[0]
     # repro = librosa.util.normalize(repro)
     # repro = tf.audio.encode_wav(repro, 44100)
     # tf.io.write_file('reproduction.wav', repro)
 
     autoencoder.compile(optimizer=keras.optimizers.Adam())
-    # autoencoder.fit(sequence, epochs=50)
+    autoencoder.fit(sequence, epochs=50)
 
     synth = get_synth_model(autoencoder.decoder)
     synth.summary()
     #
     random = tf.random.normal([5, 8])
     wavs = synth.predict_on_batch(random)
-    #
+
     i = 0
     for wav in wavs:
         wav = librosa.util.normalize(wav)
