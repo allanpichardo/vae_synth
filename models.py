@@ -7,6 +7,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
+import random
 
 
 class SoundSequence(tf.keras.utils.Sequence):
@@ -45,6 +46,7 @@ class SoundSequence(tf.keras.utils.Sequence):
 
         for i, (path, label) in enumerate(zip(wav_paths, labels)):
             wav, rate = librosa.load(path, sr=self.sr, duration=self.duration, res_type='kaiser_fast')
+            wav = librosa.effects.pitch_shift(wav, rate, n_steps=float(random.randint(-12, 12)), res_type='kaiser_fast')
             wav = tf.convert_to_tensor(wav)
             wav = tf.expand_dims(wav, 1)
             wav = self.pad_up_to(wav, [rate * int(self.duration), 1], 0)
@@ -251,7 +253,7 @@ if __name__ == '__main__':
     # tf.io.write_file('reproduction.wav', repro)
 
     autoencoder.compile(optimizer=keras.optimizers.Adam(learning_rate=0.0005))
-    autoencoder.fit(sequence, epochs=1)
+    autoencoder.fit(sequence, epochs=1000)
 
     autoencoder.stft.save(stft_model_path, save_format='tf', include_optimizer=False)
     autoencoder.encoder.save(enc_model_path, save_format='tf', include_optimizer=False)
