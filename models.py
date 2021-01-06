@@ -106,16 +106,25 @@ class VAE(keras.Model):
             z_mean, z_log_var, z = self.encoder(stft_out)
             reconstruction = self.decoder(z)
 
-            spectral_convergence_loss = tf.sqrt(
-                tf.divide(
-                    tf.reduce_sum(tf.square(stft_out - reconstruction)),
-                    tf.reduce_sum(tf.square(stft_out))
+            # spectral_convergence_loss = tf.sqrt(
+            #     tf.divide(
+            #         tf.reduce_sum(tf.square(stft_out - reconstruction)),
+            #         tf.reduce_sum(tf.square(stft_out))
+            #     )
+            # )
+            #
+            # kl = 0.5 * tf.reduce_sum(tf.exp(z_log_var) + tf.square(z_mean) - 1. - z_log_var, axis=1)
+            #
+            # total_loss = spectral_convergence_loss + kl
+
+            reconstruction_loss = tf.reduce_mean(
+                tf.reduce_sum(
+                    keras.losses.binary_crossentropy(stft_out, reconstruction), axis=(1, 2)
                 )
             )
-
-            kl = 0.5 * tf.reduce_sum(tf.exp(z_log_var) + tf.square(z_mean) - 1. - z_log_var, axis=1)
-
-            total_loss = spectral_convergence_loss + kl
+            kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
+            kl_loss = tf.reduce_mean(tf.reduce_sum(kl_loss, axis=1))
+            total_loss = reconstruction_loss + kl_loss
 
         grads = tape.gradient(total_loss, self.trainable_weights)
         self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
@@ -165,10 +174,10 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     stft_model = keras.Model(encoder_inputs, stft_out, name='stft')
 
     img_inputs = keras.Input(shape=(513, 513, 1))
-    x = layers.TimeDistributed(layers.Conv1D(32, 3, padding="same"))(img_inputs)
+    x = layers.TimeDistributed(layers.Conv1D(64, 3, padding="same"))(img_inputs)
     x = layers.ReLU()(x)
     x = layers.AveragePooling2D()(x)
-    x = layers.TimeDistributed(layers.Conv1D(32, 3, padding="same"))(x)
+    x = layers.TimeDistributed(layers.Conv1D(64, 3, padding="same"))(x)
     x = layers.ReLU()(x)
     x = layers.AveragePooling2D()(x)
     x = layers.TimeDistributed(layers.Conv1D(64, 3, padding="same"))(x)
@@ -192,11 +201,11 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     x = layers.TimeDistributed(layers.Conv1DTranspose(64, 3, padding="same"))(x)
     x = layers.ReLU()(x)
     x = layers.UpSampling2D()(x)
-    x = layers.TimeDistributed(layers.Conv1DTranspose(32, 3, padding="same"))(x)
+    x = layers.TimeDistributed(layers.Conv1DTranspose(64, 3, padding="same"))(x)
     x = layers.ReLU()(x)
     x = layers.UpSampling2D()(x)
     x = layers.ZeroPadding2D(padding=[(0, 1), (0, 1)])(x)
-    x = layers.TimeDistributed(layers.Conv1DTranspose(32, 3, padding="same"))(x)
+    x = layers.TimeDistributed(layers.Conv1DTranspose(64, 3, padding="same"))(x)
     x = layers.ReLU()(x)
     decoder_outputs = layers.Conv2DTranspose(1, 3, activation="sigmoid", padding="same")(x)
     decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
