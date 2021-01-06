@@ -238,7 +238,7 @@ if __name__ == '__main__':
     # tf.io.write_file('reproduction.wav', repro)
 
     autoencoder.compile(optimizer=keras.optimizers.Adam())
-    # autoencoder.fit(sequence, epochs=1)
+    autoencoder.fit(sequence, epochs=1)
 
     synth = get_synth_model(autoencoder.decoder)
     synth.summary()
