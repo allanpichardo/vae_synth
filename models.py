@@ -210,9 +210,9 @@ def pad_up_to(t, max_in_dims, constant_values):
 
 
 if __name__ == '__main__':
-    stft_model_path = os.path.join(os.path.dirname(__file__), 'stft_mod_v{}'.format(1))
-    enc_model_path = os.path.join(os.path.dirname(__file__), 'enc_mod_v{}'.format(1))
-    dec_model_path = os.path.join(os.path.dirname(__file__), 'dec_mod_v{}'.format(1))
+    stft_model_path = os.path.join(os.path.dirname(__file__), 'models', 'stft_mod_v{}'.format(1))
+    enc_model_path = os.path.join(os.path.dirname(__file__), 'models', 'enc_mod_v{}'.format(1))
+    dec_model_path = os.path.join(os.path.dirname(__file__), 'models', 'dec_mod_v{}'.format(1))
 
     path = os.path.join(os.path.dirname(__file__), 'samples')
     sr = 44100
@@ -254,6 +254,9 @@ if __name__ == '__main__':
 
     autoencoder.compile(optimizer=keras.optimizers.Adam(learning_rate=0.0005))
     autoencoder.fit(sequence, epochs=1000)
+
+    if not os.path.exists(os.path.join(os.path.dirname(__file__), 'models')):
+        os.makedirs(os.path.join(os.path.dirname(__file__), 'models'), exist_ok=True)
 
     autoencoder.stft.save(stft_model_path, save_format='tf', include_optimizer=False)
     autoencoder.encoder.save(enc_model_path, save_format='tf', include_optimizer=False)
