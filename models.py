@@ -23,8 +23,8 @@ class SpectrogramCallback(tf.keras.callbacks.Callback):
         x, y = self.soundequence.__getitem__(0)
 
         spec_x = self.model.stft(x)
-        embedding = self.encoder(spec_x)
-        spec_y = self.decoder(embedding)
+        embedding = self.model.encoder(spec_x)
+        spec_y = self.model.decoder(embedding)
         audio_y = spectrogram2wav(spec_y)
 
         checkpoint = tf.train.Checkpoint(embedding=tf.Variable(embedding))
