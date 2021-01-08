@@ -9,6 +9,7 @@ from tensorflow import keras
 from tensorflow.keras import layers
 from datetime import datetime
 from tensorboard.plugins import projector
+from griffin_lim import GriffinLim, STFTNormalize
 
 
 class SpectrogramCallback(tf.keras.callbacks.Callback):
@@ -25,7 +26,7 @@ class SpectrogramCallback(tf.keras.callbacks.Callback):
         spec_x = self.model.stft(x)
         embedding = self.model.encoder(spec_x)
         spec_y = self.model.decoder(embedding)
-        audio_y = spectrogram2wav(spec_y)
+        audio_y = GriffinLim()(spec_y)
 
         checkpoint = tf.train.Checkpoint(embedding=tf.Variable(embedding))
         checkpoint.save(os.path.join(self.logdir, 'embedding.ckpt'))
@@ -77,10 +78,7 @@ class SoundSequence(tf.keras.utils.Sequence):
         Y = []
 
         for i, (path, label) in enumerate(zip(wav_paths, labels)):
-            # speed = random.uniform(0.25, 2.0)
             wav, rate = librosa.load(path, sr=self.sr, duration=self.duration, res_type='kaiser_fast')
-            # wav = librosa.effects.time_stretch(wav, speed)
-            # wav = wav[:rate * int(self.duration)]
             wav = tf.convert_to_tensor(wav)
             wav = tf.expand_dims(wav, 1)
             wav = self.pad_up_to(wav, [rate * int(self.duration), 1], 0)
@@ -188,33 +186,8 @@ class VAE(keras.Model):
 def get_synth_model(decoder, input_shape=(8,)):
     inputs = keras.Input(shape=input_shape)
     x = decoder(inputs)
-    x = layers.Lambda(db_to_amp)(x)
-    x = layers.Lambda(spectrogram2wav)(x)
+    x = GriffinLim()(x)
     return keras.Model(inputs, x, name="synth")
-
-
-def db_to_amp(x):
-    return tf.pow(10.0, x * 0.05)
-
-
-def spectrogram2wav(spectrogram, n_iter=60, n_fft=1024,
-                    win_length=1024,
-                    hop_length=1024 // 4):
-    '''Converts spectrogram into a waveform using Griffin-lim's raw.
-    '''
-    spectrogram = tf.transpose(spectrogram, perm=(0, 3, 1, 2))
-
-    spectrogram = tf.cast(spectrogram, dtype=tf.complex64)  # [t, f]
-    X_best = tf.identity(spectrogram)
-    for i in range(n_iter):
-        X_t = tf.signal.inverse_stft(X_best, win_length, hop_length, n_fft)
-        est = tf.signal.stft(X_t, win_length, hop_length, n_fft, pad_end=False)  # (1, T, n_fft/2+1)
-        phase = est / tf.cast(tf.maximum(1e-8, tf.abs(est)), tf.complex64)  # [t, f]
-        X_best = spectrogram * phase  # [t, t]
-    X_t = tf.signal.inverse_stft(X_best, win_length, hop_length, n_fft)
-    y = tf.math.real(X_t)
-    y = tf.transpose(y, perm=(0, 2, 1))
-    return y
 
 
 def get_model(latent_dim=8, sr=44100, duration=3.0):
@@ -223,7 +196,7 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     x = kapre.STFT(input_shape=input_shape, n_fft=1024)(encoder_inputs)
     x = kapre.Magnitude()(x)
     x = kapre.MagnitudeToDecibel()(x)
-    x = layers.Lambda(lambda m: (m - tf.reduce_min(m)) / (tf.reduce_max(m) - tf.reduce_min(m)))(x)
+    x = STFTNormalize()(x)
     stft_out = layers.Lambda(lambda m: tf.image.resize_with_crop_or_pad(m, 513, 513))(x)
     stft_model = keras.Model(encoder_inputs, stft_out, name='stft')
 
@@ -304,22 +277,18 @@ if __name__ == '__main__':
     autoencoder.encoder.summary()
     autoencoder.decoder.summary()
 
-    # wav, rate = librosa.load('/Users/allanpichardo/PycharmProjects/audio-generation-autoencoder/FX-Robotio.wav', sr=sr,
-    #                          duration=duration)
-    # wav = tf.convert_to_tensor(wav)
-    # wav = tf.expand_dims(wav, axis=1)
-    # wav = pad_up_to(wav, [int(duration * sr), 1], 0)
-    # wav = tf.expand_dims(wav, axis=0)
-    # stft = autoencoder.stft(wav)
-    # # stft = tf.image.per_image_standardization(stft)
-    # stft = (stft - tf.reduce_min(stft)) / (tf.reduce_max(stft) - tf.reduce_min(stft))
-    # # repro = stft_to_wav_model()(stft)
-    # repro = spectrogram2wav(stft)
-    # # repro = tf.transpose(repro)
-    # repro = repro[0]
-    # repro = librosa.util.normalize(repro)
-    # repro = tf.audio.encode_wav(repro, 44100)
-    # tf.io.write_file('reproduction.wav', repro)
+    wav, rate = librosa.load('/Users/allanpichardo/PycharmProjects/audio-generation-autoencoder/FX-Robotio.wav', sr=sr,
+                             duration=duration)
+    wav = tf.convert_to_tensor(wav)
+    wav = tf.expand_dims(wav, axis=1)
+    wav = pad_up_to(wav, [int(duration * sr), 1], 0)
+    wav = tf.expand_dims(wav, axis=0)
+    stft = autoencoder.stft(wav)
+    repro = GriffinLim()(stft)
+    repro = repro[0]
+    repro = librosa.util.normalize(repro)
+    repro = tf.audio.encode_wav(repro, 44100)
+    tf.io.write_file('reproduction.wav', repro)
 
     autoencoder.compile(optimizer=keras.optimizers.Adam(learning_rate=0.0005))
     autoencoder.fit(sequence, epochs=15, callbacks=[
