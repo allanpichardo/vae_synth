@@ -3,6 +3,7 @@ import tensorflow as tf
 
 """
 TensorFlow implementation of Griffin-lim Algorithm for voice reconstruction
+https://github.com/candlewill/Griffin_lim
 """
 
 num_mels = 80

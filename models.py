@@ -277,18 +277,18 @@ if __name__ == '__main__':
     autoencoder.encoder.summary()
     autoencoder.decoder.summary()
 
-    wav, rate = librosa.load('/Users/allanpichardo/PycharmProjects/audio-generation-autoencoder/FX-Robotio.wav', sr=sr,
-                             duration=duration)
-    wav = tf.convert_to_tensor(wav)
-    wav = tf.expand_dims(wav, axis=1)
-    wav = pad_up_to(wav, [int(duration * sr), 1], 0)
-    wav = tf.expand_dims(wav, axis=0)
-    stft = autoencoder.stft(wav)
-    repro = GriffinLim()(stft)
-    repro = repro[0]
-    repro = librosa.util.normalize(repro)
-    repro = tf.audio.encode_wav(repro, 44100)
-    tf.io.write_file('reproduction.wav', repro)
+    # wav, rate = librosa.load('/Users/allanpichardo/PycharmProjects/audio-generation-autoencoder/FX-Robotio.wav', sr=sr,
+    #                          duration=duration)
+    # wav = tf.convert_to_tensor(wav)
+    # wav = tf.expand_dims(wav, axis=1)
+    # wav = pad_up_to(wav, [int(duration * sr), 1], 0)
+    # wav = tf.expand_dims(wav, axis=0)
+    # stft = autoencoder.stft(wav)
+    # repro = GriffinLim()(stft)
+    # repro = repro[0]
+    # repro = librosa.util.normalize(repro)
+    # repro = tf.audio.encode_wav(repro, 44100)
+    # tf.io.write_file('reproduction.wav', repro)
 
     autoencoder.compile(optimizer=keras.optimizers.Adam(learning_rate=0.0005))
     autoencoder.fit(sequence, epochs=15, callbacks=[
