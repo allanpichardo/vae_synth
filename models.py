@@ -189,8 +189,13 @@ class VAE(keras.Model):
 def get_synth_model(decoder, input_shape=(8,)):
     inputs = keras.Input(shape=input_shape)
     x = decoder(inputs)
+    x = layers.Lambda(db_to_amp)(x)
     x = layers.Lambda(spectrogram2wav)(x)
     return keras.Model(inputs, x, name="synth")
+
+
+def db_to_amp(x):
+    return tf.pow(10.0, x * 0.05)
 
 
 def spectrogram2wav(spectrogram, n_iter=60, n_fft=1024,
@@ -218,6 +223,7 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     encoder_inputs = keras.Input(shape=input_shape)
     x = kapre.STFT(input_shape=input_shape, n_fft=1024)(encoder_inputs)
     x = kapre.Magnitude()(x)
+    x = kapre.MagnitudeToDecibel()(x)
     x = layers.Lambda(lambda m: (m - tf.reduce_min(m)) / (tf.reduce_max(m) - tf.reduce_min(m)))(x)
     stft_out = layers.Lambda(lambda m: tf.image.resize_with_crop_or_pad(m, 513, 513))(x)
     stft_model = keras.Model(encoder_inputs, stft_out, name='stft')
