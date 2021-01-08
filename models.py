@@ -168,8 +168,9 @@ class VAE(keras.Model):
             #         keras.losses.mae(stft_out, reconstruction), axis=(1, 2)
             #     )
             # )
+            coefficient = 0.0001
             kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
-            kl_loss = tf.reduce_mean(tf.reduce_sum(kl_loss, axis=1))
+            kl_loss = tf.reduce_mean(tf.reduce_sum(kl_loss, axis=1)) * coefficient
             total_loss = reconstruction_loss + kl_loss
 
         grads = tape.gradient(total_loss, self.trainable_weights)
