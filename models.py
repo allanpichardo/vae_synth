@@ -7,6 +7,41 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
+from datetime import datetime
+from tensorboard.plugins import projector
+
+
+class SpectrogramCallback(tf.keras.callbacks.Callback):
+
+    def __init__(self, soundsequence, sr=44100, logdir="logs/" + datetime.now().strftime("%Y%m%d-%H%M%S")):
+        super().__init__()
+        self.soundequence = soundsequence
+        self.logdir = logdir
+        self.sr = sr
+
+    def on_epoch_end(self, epoch, logs=None):
+        x, y = self.soundequence.__getitem__(0)
+
+        spec_x = self.model.stft(x)
+        embedding = self.encoder(spec_x)
+        spec_y = self.decoder(embedding)
+        audio_y = spectrogram2wav(spec_y)
+
+        checkpoint = tf.train.Checkpoint(embedding=tf.Variable(embedding))
+        checkpoint.save(os.path.join(self.logdir, 'embedding.ckpt'))
+        config = projector.ProjectorConfig()
+        embs = config.embeddings.add()
+        embs.tensor_name = "embedding/.ATTRIBUTES/VARIABLE_VALUE"
+        projector.visualize_embeddings(self.logdir, config)
+
+        file_writer = tf.summary.create_file_writer(self.logdir)
+
+        with file_writer.as_default():
+            tf.summary.audio("Sample Input", x, self.sr, step=epoch, max_outputs=5, description="Audio sample input")
+            tf.summary.image("STFT Input", spec_x, step=epoch, max_outputs=5, description="Spectrogram input")
+            tf.summary.image("STFT Reconstruction", spec_y, step=epoch, max_outputs=5, description="Spectrogram output")
+            tf.summary.audio("Sample Reconstruction", audio_y, self.sr, step=epoch, max_outputs=5,
+                             description="Synthesized audio")
 
 
 class SoundSequence(tf.keras.utils.Sequence):
@@ -236,6 +271,8 @@ def pad_up_to(t, max_in_dims, constant_values):
 
 
 if __name__ == '__main__':
+    logdir = os.path.join(os.path.dirname(__file__), 'logs', datetime.now().strftime("%Y%m%d-%H%M%S"))
+
     stft_model_path = os.path.join(os.path.dirname(__file__), 'models', 'stft_mod_v{}'.format(1))
     enc_model_path = os.path.join(os.path.dirname(__file__), 'models', 'enc_mod_v{}'.format(1))
     dec_model_path = os.path.join(os.path.dirname(__file__), 'models', 'dec_mod_v{}'.format(1))
@@ -279,7 +316,10 @@ if __name__ == '__main__':
     # tf.io.write_file('reproduction.wav', repro)
 
     autoencoder.compile(optimizer=keras.optimizers.Adam(learning_rate=0.0005))
-    autoencoder.fit(sequence, epochs=100)
+    autoencoder.fit(sequence, epochs=5, callbacks=[
+        SpectrogramCallback(sequence, sr=sr),
+        tf.keras.callbacks.TensorBoard(log_dir=logdir)
+    ])
 
     if not os.path.exists(os.path.join(os.path.dirname(__file__), 'models')):
         os.makedirs(os.path.join(os.path.dirname(__file__), 'models'), exist_ok=True)
