@@ -260,7 +260,7 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     x = layers.ZeroPadding2D(padding=[(0, 1), (0, 1)])(x)
     x = layers.TimeDistributed(layers.Conv1DTranspose(32, 3, padding="same"))(x)
     x = layers.LeakyReLU()(x)
-    decoder_outputs = layers.Conv2DTranspose(1, 3, activation="sigmoid", padding="same")(x)
+    decoder_outputs = layers.Conv2DTranspose(1, 3, activation=None, padding="same")(x)
     decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
 
     vae = VAE(stft_model, encoder, decoder)
@@ -285,6 +285,7 @@ if __name__ == '__main__':
     sr = 44100
     duration = 3.0
     batch_size = 4
+    latent_dim = 10
 
     sequence = SoundSequence(path, sr=sr, duration=duration, batch_size=batch_size)
 
@@ -296,7 +297,7 @@ if __name__ == '__main__':
             tf.keras.models.load_model(dec_model_path, compile=False)
         )
     else:
-        autoencoder = get_model(latent_dim=8, sr=sr, duration=duration)
+        autoencoder = get_model(latent_dim=latent_dim, sr=sr, duration=duration)
 
     autoencoder.stft.summary()
     autoencoder.encoder.summary()
@@ -335,7 +336,7 @@ if __name__ == '__main__':
     synth = get_synth_model(autoencoder.decoder)
     synth.summary()
     #
-    random = tf.random.normal([5, 8])
+    random = tf.random.normal([5, latent_dim])
     wavs = synth.predict_on_batch(random)
 
     i = 0
