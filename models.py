@@ -240,8 +240,8 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     x = layers.TimeDistributed(layers.Conv1D(1, 3, padding="same"))(x)
     x = layers.LeakyReLU()(x)
     x = layers.Flatten()(x)
-    z_mean = layers.Dense(latent_dim, name="z_mean", activation="tanh")(x)
-    z_log_var = layers.Dense(latent_dim, name="z_log_var", activation="tanh")(x)
+    z_mean = layers.Dense(latent_dim, name="z_mean", activation=None)(x)
+    z_log_var = layers.Dense(latent_dim, name="z_log_var", activation=None)(x)
     z = Sampling()([z_mean, z_log_var])
     encoder = keras.Model(img_inputs, [z_mean, z_log_var, z], name="encoder")
 
