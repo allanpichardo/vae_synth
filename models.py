@@ -234,7 +234,7 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     x = layers.ZeroPadding2D(padding=[(0, 1), (0, 1)])(x)
     x = layers.TimeDistributed(layers.Conv1DTranspose(32, 3, padding="same"))(x)
     x = layers.LeakyReLU()(x)
-    decoder_outputs = layers.Conv2DTranspose(1, 3, activation=None, padding="same")(x)
+    decoder_outputs = layers.Conv2DTranspose(1, 3, activation="sigmoid", padding="same")(x)
     decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
 
     vae = VAE(stft_model, encoder, decoder)
