@@ -59,8 +59,6 @@ class SoundSequence(tf.keras.utils.Sequence):
         self.batch_size = batch_size
         self.shuffle = shuffle
 
-        self.stft_func = kapre.composed.get_stft_mag_phase((int(sr * duration), 1))
-
         self.wav_paths = glob(os.path.join(music_path, '*', '*'))
         self.labels = []
         for path in self.wav_paths:
@@ -230,17 +228,17 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
 
     img_inputs = keras.Input(shape=(513, 513, 1))
     x = layers.TimeDistributed(layers.Conv1D(64, 3, padding="same"))(img_inputs)
-    x = layers.ReLU()(x)
+    x = layers.LeakyReLU()(x)
     x = layers.AveragePooling2D()(x)
     x = layers.TimeDistributed(layers.Conv1D(128, 3, padding="same"))(x)
-    x = layers.ReLU()(x)
+    x = layers.LeakyReLU()(x)
     x = layers.AveragePooling2D()(x)
     x = layers.TimeDistributed(layers.Conv1D(256, 3, padding="same"))(x)
-    x = layers.ReLU()(x)
+    x = layers.LeakyReLU()(x)
     x = layers.AveragePooling2D()(x)
     x = layers.TimeDistributed(layers.Conv1D(256, 3, padding="same"))(x)
     x = layers.TimeDistributed(layers.Conv1D(1, 3, padding="same"))(x)
-    x = layers.ReLU()(x)
+    x = layers.LeakyReLU()(x)
     x = layers.Flatten()(x)
     z_mean = layers.Dense(latent_dim, name="z_mean", activation="tanh")(x)
     z_log_var = layers.Dense(latent_dim, name="z_log_var", activation="tanh")(x)
@@ -251,17 +249,17 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     x = layers.Dense(64 * 64, activation="relu")(latent_inputs)
     x = layers.Reshape((64, 64, 1))(x)
     x = layers.TimeDistributed(layers.Conv1DTranspose(256, 3, padding="same"))(x)
-    x = layers.ReLU()(x)
+    x = layers.LeakyReLU()(x)
     x = layers.UpSampling2D()(x)
     x = layers.TimeDistributed(layers.Conv1DTranspose(256, 3, padding="same"))(x)
-    x = layers.ReLU()(x)
+    x = layers.LeakyReLU()(x)
     x = layers.UpSampling2D()(x)
     x = layers.TimeDistributed(layers.Conv1DTranspose(128, 3, padding="same"))(x)
-    x = layers.ReLU()(x)
+    x = layers.LeakyReLU()(x)
     x = layers.UpSampling2D()(x)
     x = layers.ZeroPadding2D(padding=[(0, 1), (0, 1)])(x)
     x = layers.TimeDistributed(layers.Conv1DTranspose(64, 3, padding="same"))(x)
-    x = layers.ReLU()(x)
+    x = layers.LeakyReLU()(x)
     decoder_outputs = layers.Conv2DTranspose(1, 3, activation="sigmoid", padding="same")(x)
     decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
 
