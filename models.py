@@ -156,16 +156,7 @@ class VAE(keras.Model):
                     tf.reduce_sum(tf.square(stft_out))
                 )
             )
-            #
-            # kl = 0.5 * tf.reduce_sum(tf.exp(z_log_var) + tf.square(z_mean) - 1. - z_log_var, axis=1)
-            #
-            # total_loss = spectral_convergence_loss + kl
 
-            # reconstruction_loss = tf.reduce_mean(
-            #     tf.reduce_sum(
-            #         keras.losses.mae(stft_out, reconstruction), axis=(1, 2)
-            #     )
-            # )
             coefficient = 0.0001
             kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
             kl_loss = tf.reduce_mean(tf.reduce_sum(kl_loss, axis=1)) * coefficient
@@ -197,7 +188,9 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     x = kapre.Magnitude()(x)
     x = kapre.MagnitudeToDecibel()(x)
     x = STFTNormalize()(x)
-    stft_out = layers.Lambda(lambda m: tf.image.resize_with_crop_or_pad(m, 513, 513))(x)
+    x = layers.Lambda(lambda m: tf.image.resize_with_crop_or_pad(m, 513, 513))(x)
+    x = layers.experimental.preprocessing.RandomFlip(mode='horizontal')(x)
+    stft_out = layers.experimental.preprocessing.RandomTranslation(height_factor=(-0.5, 0.0), width_factor=0.0)(x)
     stft_model = keras.Model(encoder_inputs, stft_out, name='stft')
 
     img_inputs = keras.Input(shape=(513, 513, 1))
