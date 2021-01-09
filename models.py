@@ -37,10 +37,13 @@ class SpectrogramCallback(tf.keras.callbacks.Callback):
 
         file_writer = tf.summary.create_file_writer(self.logdir)
 
+        norm = layers.experimental.preprocessing.Normalization()
+        norm.adapt(spec_x)
+
         with file_writer.as_default():
             tf.summary.audio("Sample Input", x, self.sr, step=epoch, max_outputs=5, description="Audio sample input")
-            tf.summary.image("STFT Input", spec_x, step=epoch, max_outputs=5, description="Spectrogram input")
-            tf.summary.image("STFT Reconstruction", spec_y, step=epoch, max_outputs=5, description="Spectrogram output")
+            tf.summary.image("STFT Input", norm(spec_x), step=epoch, max_outputs=5, description="Spectrogram input")
+            tf.summary.image("STFT Reconstruction", norm(spec_y), step=epoch, max_outputs=5, description="Spectrogram output")
             tf.summary.audio("Sample Reconstruction", audio_y, self.sr, step=epoch, max_outputs=5,
                              description="Synthesized audio")
 
@@ -174,24 +177,33 @@ class VAE(keras.Model):
         }
 
 
+def mag_phase_to_complex(x):
+    m, p = tf.split(x, 2, axis=3)
+    real = m * tf.cos(p)
+    imag = m * tf.sin(p)
+    return tf.complex(real, imag)
+
+
 def get_synth_model(decoder, input_shape=(8,)):
     inputs = keras.Input(shape=input_shape)
     x = decoder(inputs)
-    x = GriffinLim()(x)
+    x = layers.Lambda(mag_phase_to_complex)(x)
+    x = kapre.InverseSTFT(n_fft=1024)(x)
     return keras.Model(inputs, x, name="synth")
 
 
 def get_model(latent_dim=8, sr=44100, duration=3.0):
     input_shape = (int(sr * duration), 1)
     encoder_inputs = keras.Input(shape=input_shape)
-    x = kapre.STFT(input_shape=input_shape, n_fft=1024)(encoder_inputs)
-    x = kapre.Magnitude()(x)
-    x = kapre.MagnitudeToDecibel()(x)
-    x = STFTNormalize()(x)
+    # x = kapre.STFT(input_shape=input_shape, n_fft=1024)(encoder_inputs)
+    # x = kapre.Magnitude()(x)
+    # x = kapre.MagnitudeToDecibel()(x)
+    x = kapre.composed.get_stft_mag_phase(input_shape, n_fft=1024, return_decibel=True)(encoder_inputs)
+    # x = STFTNormalize()(x)
     stft_out = layers.Lambda(lambda m: tf.image.resize_with_crop_or_pad(m, 513, 513))(x)
     stft_model = keras.Model(encoder_inputs, stft_out, name='stft')
 
-    img_inputs = keras.Input(shape=(513, 513, 1))
+    img_inputs = keras.Input(shape=(513, 513, 2))
     x =layers.Conv2D(32, 7, padding="same", strides=2)(img_inputs)
     x = layers.LeakyReLU()(x)
     x = layers.Conv2D(32, 5, padding="same", strides=2)(x)
@@ -219,7 +231,7 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     x = layers.ZeroPadding2D(padding=[(0, 1), (0, 1)])(x)
     x = layers.Conv2DTranspose(32, 7, padding="same")(x)
     x = layers.LeakyReLU()(x)
-    decoder_outputs = layers.Conv2DTranspose(1, 1, activation="sigmoid", padding="same")(x)
+    decoder_outputs = layers.Conv2DTranspose(2, 1, activation=None, padding="same")(x)
     decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
 
     vae = VAE(stft_model, encoder, decoder)
@@ -269,10 +281,11 @@ if __name__ == '__main__':
     # wav = pad_up_to(wav, [int(duration * sr), 1], 0)
     # wav = tf.expand_dims(wav, axis=0)
     # stft = autoencoder.stft(wav)
-    # repro = GriffinLim()(stft)
+    # repro = kapre.InverseSTFT(n_fft=1024)(mag_phase_to_complex(stft))
+    # # repro = GriffinLim()(stft)
     # repro = repro[0]
     # repro = librosa.util.normalize(repro)
-    # repro = tf.audio.encode_wav(repro, 44100)
+    # repro = tf.audio.encode_wav(repro, rate)
     # tf.io.write_file('reproduction.wav', repro)
 
     autoencoder.compile(optimizer=keras.optimizers.Adam(learning_rate=0.0005))

@@ -60,7 +60,7 @@ def inv_spectrogram(spectrogram):
 
 def _denormalize(D):
     clipped = tf.clip_by_value(D, -max_abs_value, max_abs_value)
-    clipped = clipped * (2 * max_abs_value) - max_abs_value
+    # clipped = clipped * (2 * max_abs_value) - max_abs_value
     return (((clipped + max_abs_value) * -min_level_db / (
             2 * max_abs_value)) + min_level_db)
 
@@ -71,7 +71,8 @@ def _normalize(S):
                             -max_abs_value,
                             max_abs_value
                             )
-    return (clipped + max_abs_value) / (2 * max_abs_value)
+    # return (clipped + max_abs_value) / (2 * max_abs_value)
+    return clipped
 
 
 def _db_to_amp(x):
