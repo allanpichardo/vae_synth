@@ -194,17 +194,17 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     stft_model = keras.Model(encoder_inputs, stft_out, name='stft')
 
     img_inputs = keras.Input(shape=(513, 513, 1))
-    x = layers.TimeDistributed(layers.Conv1D(32, 3, padding="same"))(img_inputs)
+    x =layers.Conv2D(32, 3, padding="same")(img_inputs)
     x = layers.LeakyReLU()(x)
     x = layers.AveragePooling2D()(x)
-    x = layers.TimeDistributed(layers.Conv1D(32, 3, padding="same"))(x)
+    x = layers.Conv2D(32, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
     x = layers.AveragePooling2D()(x)
-    x = layers.TimeDistributed(layers.Conv1D(64, 3, padding="same"))(x)
+    x = layers.Conv2D(64, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
     x = layers.AveragePooling2D()(x)
-    x = layers.TimeDistributed(layers.Conv1D(64, 3, padding="same"))(x)
-    x = layers.TimeDistributed(layers.Conv1D(1, 3, padding="same"))(x)
+    x = layers.Conv2D(64, 3, padding="same")(x)
+    x = layers.Conv2D(1, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
     x = layers.Flatten()(x)
     z_mean = layers.Dense(latent_dim, name="z_mean", activation=None)(x)
@@ -215,17 +215,17 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     latent_inputs = keras.Input(shape=(latent_dim,))
     x = layers.Dense(64 * 64, activation="relu")(latent_inputs)
     x = layers.Reshape((64, 64, 1))(x)
-    x = layers.TimeDistributed(layers.Conv1DTranspose(64, 3, padding="same"))(x)
+    x = layers.Conv2DTranspose(64, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
     x = layers.UpSampling2D()(x)
-    x = layers.TimeDistributed(layers.Conv1DTranspose(64, 3, padding="same"))(x)
+    x = layers.Conv2DTranspose(64, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
     x = layers.UpSampling2D()(x)
-    x = layers.TimeDistributed(layers.Conv1DTranspose(32, 3, padding="same"))(x)
+    x = layers.Conv2DTranspose(32, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
     x = layers.UpSampling2D()(x)
     x = layers.ZeroPadding2D(padding=[(0, 1), (0, 1)])(x)
-    x = layers.TimeDistributed(layers.Conv1DTranspose(32, 3, padding="same"))(x)
+    x = layers.Conv2DTranspose(32, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
     decoder_outputs = layers.Conv2DTranspose(1, 3, activation="sigmoid", padding="same")(x)
     decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
@@ -252,7 +252,7 @@ if __name__ == '__main__':
     sr = 44100
     duration = 3.0
     batch_size = 4
-    latent_dim = 10
+    latent_dim = 8
 
     sequence = SoundSequence(path, sr=sr, duration=duration, batch_size=batch_size)
 
