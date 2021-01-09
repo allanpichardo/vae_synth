@@ -188,9 +188,9 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     x = kapre.Magnitude()(x)
     x = kapre.MagnitudeToDecibel()(x)
     x = STFTNormalize()(x)
-    x = layers.Lambda(lambda m: tf.image.resize_with_crop_or_pad(m, 513, 513))(x)
-    x = layers.experimental.preprocessing.RandomFlip(mode='horizontal')(x)
-    stft_out = layers.experimental.preprocessing.RandomTranslation(height_factor=(-0.5, 0.0), width_factor=0.0)(x)
+    stft_out = layers.Lambda(lambda m: tf.image.resize_with_crop_or_pad(m, 513, 513))(x)
+    # x = layers.experimental.preprocessing.RandomFlip(mode='horizontal')(x)
+    # stft_out = layers.experimental.preprocessing.RandomTranslation(height_factor=(-0.5, 0.0), width_factor=0.0)(x)
     stft_model = keras.Model(encoder_inputs, stft_out, name='stft')
 
     img_inputs = keras.Input(shape=(513, 513, 1))
