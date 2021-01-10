@@ -276,7 +276,7 @@ if __name__ == '__main__':
     dec_model_path = os.path.join(os.path.dirname(__file__), 'models', 'dec_mod_v{}'.format(1))
 
     path = os.path.join(os.path.dirname(__file__), 'samples')
-    sr = 44100
+    sr = 22050
     duration = 3.0
     batch_size = 16
     latent_dim = 16
