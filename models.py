@@ -11,6 +11,8 @@ from datetime import datetime
 from tensorboard.plugins import projector
 from griffin_lim import GriffinLim, STFTNormalize, STFTDenormalize, DBToAmp
 
+N_FFT = 512
+
 
 class SpectrogramCallback(tf.keras.callbacks.Callback):
 
@@ -41,7 +43,7 @@ class SpectrogramCallback(tf.keras.callbacks.Callback):
         spec_x = self.model.stft(x)
         embedding = self.model.encoder(spec_x)
         spec_y = self.model.decoder(embedding)
-        audio_y = kapre.InverseSTFT(n_fft=1024)(mag_phase_to_complex(spec_y))
+        audio_y = kapre.InverseSTFT(n_fft=N_FFT)(mag_phase_to_complex(spec_y))
 
         mag_x = kapre.MagnitudeToDecibel()(kapre.Magnitude()(mag_phase_to_complex(spec_x)))
         mag_y = kapre.MagnitudeToDecibel()(kapre.Magnitude()(mag_phase_to_complex(spec_y)))
@@ -59,7 +61,7 @@ class SpectrogramCallback(tf.keras.callbacks.Callback):
 
 class SoundSequence(tf.keras.utils.Sequence):
 
-    def __init__(self, music_path, n_fft=1024, sr=44100, duration=2.0, batch_size=32, shuffle=True):
+    def __init__(self, music_path, n_fft=N_FFT, sr=44100, duration=2.0, batch_size=32, shuffle=True):
         """
         Create a data generator that reads wav files from a directory
         :param music_path:
@@ -198,33 +200,33 @@ def get_synth_model(decoder, input_shape=(8,)):
     inputs = keras.Input(shape=input_shape)
     x = decoder(inputs)
     x = layers.Lambda(mag_phase_to_complex)(x)
-    x = kapre.InverseSTFT(n_fft=1024)(x)
+    x = kapre.InverseSTFT(n_fft=N_FFT)(x)
     return keras.Model(inputs, x, name="synth")
 
 
 def get_model(latent_dim=8, sr=44100, duration=3.0):
     input_shape = (int(sr * duration), 1)
     encoder_inputs = keras.Input(shape=input_shape)
-    x = kapre.composed.get_stft_mag_phase(input_shape, n_fft=1024, return_decibel=False)(encoder_inputs)
+    x = kapre.composed.get_stft_mag_phase(input_shape, n_fft=N_FFT, return_decibel=False)(encoder_inputs)
     x = layers.experimental.preprocessing.Normalization(name='normalizer')(x)
-    stft_out = layers.Lambda(lambda m: tf.image.resize_with_crop_or_pad(m, 513, 513))(x)
+    stft_out = layers.Lambda(lambda m: tf.image.resize_with_crop_or_pad(m, 257, 257))(x)
     stft_model = keras.Model(encoder_inputs, stft_out, name='stft')
 
-    img_inputs = keras.Input(shape=(513, 513, 2))
-    x = layers.Conv2D(64, 3, padding="same")(img_inputs)
-    x = layers.Conv2D(64, 3, padding="same")(x)
+    img_inputs = keras.Input(shape=(257, 257, 2))
+    x = layers.Conv2D(32, 3, padding="same")(img_inputs)
+    x = layers.Conv2D(32, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
-    x = layers.MaxPooling2D()(x)
-    x = layers.Conv2D(64, 3, padding="same")(x)
-    x = layers.Conv2D(64, 3, padding="same")(x)
+    x = layers.AveragePooling2D()(x)
+    x = layers.Conv2D(32, 3, padding="same")(x)
+    x = layers.Conv2D(32, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
-    x = layers.MaxPooling2D()(x)
-    x = layers.Conv2D(64, 3, padding="same")(x)
-    x = layers.Conv2D(64, 3, padding="same")(x)
+    x = layers.AveragePooling2D()(x)
+    x = layers.Conv2D(32, 3, padding="same")(x)
+    x = layers.Conv2D(32, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
-    x = layers.MaxPooling2D()(x)
-    x = layers.Conv2D(64, 3, padding="same")(x)
-    x = layers.Conv2D(64, 3, padding="same")(x)
+    x = layers.AveragePooling2D()(x)
+    x = layers.Conv2D(32, 3, padding="same")(x)
+    x = layers.Conv2D(32, 3, padding="same")(x)
     x = layers.Conv2D(1, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
     x = layers.Flatten()(x)
@@ -234,23 +236,23 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     encoder = keras.Model(img_inputs, [z_mean, z_log_var, z], name="encoder")
 
     latent_inputs = keras.Input(shape=(latent_dim,))
-    x = layers.Dense(64 * 64, activation="relu")(latent_inputs)
-    x = layers.Reshape((64, 64, 1))(x)
-    x = layers.Conv2DTranspose(64, 3, padding="same")(x)
-    x = layers.Conv2DTranspose(64, 3, padding="same")(x)
+    x = layers.Dense(32 * 32, activation="relu")(latent_inputs)
+    x = layers.Reshape((32, 32, 1))(x)
+    x = layers.Conv2DTranspose(32, 3, padding="same")(x)
+    x = layers.Conv2DTranspose(32, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
-    x = layers.UpSampling2D()(x)
-    x = layers.Conv2DTranspose(64, 3, padding="same")(x)
-    x = layers.Conv2DTranspose(64, 3, padding="same")(x)
+    x = layers.UpSampling2D(interpolation="bilinear")(x)
+    x = layers.Conv2DTranspose(32, 3, padding="same")(x)
+    x = layers.Conv2DTranspose(32, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
-    x = layers.UpSampling2D()(x)
-    x = layers.Conv2DTranspose(64, 3, padding="same")(x)
-    x = layers.Conv2DTranspose(64, 3, padding="same")(x)
+    x = layers.UpSampling2D(interpolation="bilinear")(x)
+    x = layers.Conv2DTranspose(32, 3, padding="same")(x)
+    x = layers.Conv2DTranspose(32, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
-    x = layers.UpSampling2D()(x)
+    x = layers.UpSampling2D(interpolation="bilinear")(x)
     x = layers.ZeroPadding2D(padding=[(0, 1), (0, 1)])(x)
-    x = layers.Conv2DTranspose(64, 3, padding="same")(x)
-    x = layers.Conv2DTranspose(64, 3, padding="same")(x)
+    x = layers.Conv2DTranspose(32, 3, padding="same")(x)
+    x = layers.Conv2DTranspose(32, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
     decoder_outputs = layers.Conv2DTranspose(2, 3, activation=None, padding="same")(x)
     decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
