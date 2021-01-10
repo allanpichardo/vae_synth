@@ -51,11 +51,11 @@ class SpectrogramCallback(tf.keras.callbacks.Callback):
         file_writer = tf.summary.create_file_writer(self.logdir)
 
         with file_writer.as_default():
-            tf.summary.audio("Sample Input", x, self.sr, step=epoch, max_outputs=5, description="Audio sample input")
+            tf.summary.audio("Sample Input", tf.cast(x, tf.float32), self.sr, step=epoch, max_outputs=5, description="Audio sample input")
             tf.summary.image("STFT Input", self.normalize(mag_x), step=epoch, max_outputs=5, description="Spectrogram input")
             tf.summary.image("STFT Reconstruction", self.normalize(mag_y), step=epoch, max_outputs=5,
                              description="Spectrogram output")
-            tf.summary.audio("Sample Reconstruction", librosa.util.normalize(audio_y), self.sr, step=epoch, max_outputs=5,
+            tf.summary.audio("Sample Reconstruction", tf.cast(librosa.util.normalize(audio_y), tf.float32), self.sr, step=epoch, max_outputs=5,
                              description="Synthesized audio")
 
 
@@ -94,6 +94,7 @@ class SoundSequence(tf.keras.utils.Sequence):
         for i, (path, label) in enumerate(zip(wav_paths, labels)):
             wav, rate = librosa.load(path, sr=self.sr, duration=self.duration, res_type='kaiser_fast')
             wav = tf.convert_to_tensor(wav)
+            wav = tf.cast(wav, tf.float16)
             wav = tf.expand_dims(wav, 1)
             wav = self.pad_up_to(wav, [rate * int(self.duration), 1], 0)
             X.append(wav)
@@ -277,7 +278,7 @@ if __name__ == '__main__':
     sr = 44100
     duration = 1.0
     batch_size = 4
-    latent_dim = 16
+    latent_dim = 128
 
     sequence = SoundSequence(path, sr=sr, duration=duration, batch_size=batch_size)
 
@@ -331,6 +332,7 @@ if __name__ == '__main__':
     i = 0
     for wav in wavs:
         wav = librosa.util.normalize(wav)
+        wav = tf.cast(wav, tf.float32)
         wav = tf.audio.encode_wav(wav, sr)
         tf.io.write_file('output-{}.wav'.format(i), wav)
         i = i + 1
