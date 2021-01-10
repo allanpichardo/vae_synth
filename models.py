@@ -40,13 +40,6 @@ class SpectrogramCallback(tf.keras.callbacks.Callback):
         spec_y = self.model.decoder(embedding)
         audio_y = kapre.InverseSTFT(n_fft=1024)(mag_phase_to_complex(spec_y))
 
-        checkpoint = tf.train.Checkpoint(embedding=tf.Variable(embedding))
-        checkpoint.save(os.path.join(self.logdir, 'embedding.ckpt'))
-        config = projector.ProjectorConfig()
-        embs = config.embeddings.add()
-        embs.tensor_name = "embedding/.ATTRIBUTES/VARIABLE_VALUE"
-        projector.visualize_embeddings(self.logdir, config)
-
         file_writer = tf.summary.create_file_writer(self.logdir)
 
         with file_writer.as_default():
@@ -211,14 +204,17 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     stft_model = keras.Model(encoder_inputs, stft_out, name='stft')
 
     img_inputs = keras.Input(shape=(513, 513, 2))
-    x = layers.Conv2D(32, 3, padding="same", strides=2)(img_inputs)
+    x = layers.Conv2D(32, 3, padding="same")(img_inputs)
     x = layers.LeakyReLU()(x)
-    x = layers.Conv2D(32, 3, padding="same", strides=2)(x)
-    x = layers.LeakyReLU()(x)
-    x = layers.Conv2D(32, 3, padding="same", strides=2)(x)
-    x = layers.LeakyReLU()(x)
+    x = layers.MaxPooling2D()(x)
     x = layers.Conv2D(32, 3, padding="same")(x)
-    x = layers.Conv2D(1, 1, padding="same")(x)
+    x = layers.LeakyReLU()(x)
+    x = layers.MaxPooling2D()(x)
+    x = layers.Conv2D(32, 3, padding="same")(x)
+    x = layers.LeakyReLU()(x)
+    x = layers.MaxPooling2D()(x)
+    x = layers.Conv2D(32, 3, padding="same")(x)
+    x = layers.Conv2D(1, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
     x = layers.Flatten()(x)
     z_mean = layers.Dense(latent_dim, name="z_mean", activation=None)(x)
@@ -229,16 +225,19 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     latent_inputs = keras.Input(shape=(latent_dim,))
     x = layers.Dense(64 * 64, activation="relu")(latent_inputs)
     x = layers.Reshape((64, 64, 1))(x)
-    x = layers.Conv2DTranspose(32, 3, padding="same", strides=2)(x)
+    x = layers.Conv2DTranspose(32, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
-    x = layers.Conv2DTranspose(32, 3, padding="same", strides=2)(x)
+    x = layers.UpSampling2D()(x)
+    x = layers.Conv2DTranspose(32, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
-    x = layers.Conv2DTranspose(32, 3, padding="same", strides=2)(x)
+    x = layers.UpSampling2D()(x)
+    x = layers.Conv2DTranspose(32, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
+    x = layers.UpSampling2D()(x)
     x = layers.ZeroPadding2D(padding=[(0, 1), (0, 1)])(x)
     x = layers.Conv2DTranspose(32, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
-    decoder_outputs = layers.Conv2DTranspose(2, 3, activation="tanh", padding="same")(x)
+    decoder_outputs = layers.Conv2DTranspose(2, 3, activation=None, padding="same")(x)
     decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
 
     vae = VAE(stft_model, encoder, decoder)
@@ -298,7 +297,7 @@ if __name__ == '__main__':
     autoencoder.compile(optimizer=keras.optimizers.Adam(learning_rate=0.0005))
     autoencoder.fit(sequence, epochs=50, callbacks=[
         SpectrogramCallback(sequence, sr=sr),
-        tf.keras.callbacks.TensorBoard(log_dir=logdir)
+        tf.keras.callbacks.TensorBoard(log_dir=logdir, embeddings_freq=1)
     ])
 
     if not os.path.exists(os.path.join(os.path.dirname(__file__), 'models')):
