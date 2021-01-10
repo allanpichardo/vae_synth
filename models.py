@@ -156,12 +156,13 @@ class VAE(keras.Model):
             z_mean, z_log_var, z = self.encoder(stft_out)
             reconstruction = self.decoder(z)
 
-            reconstruction_loss = tf.sqrt(
-                tf.divide(
-                    tf.reduce_sum(tf.square(stft_out - reconstruction)),
-                    tf.reduce_sum(tf.square(stft_out))
-                )
-            )
+            # reconstruction_loss = tf.sqrt(
+            #     tf.divide(
+            #         tf.reduce_sum(tf.square(stft_out - reconstruction)),
+            #         tf.reduce_sum(tf.square(stft_out))
+            #     )
+            # )
+            reconstruction_loss = tf.keras.losses.MeanAbsoluteError()(stft_out, reconstruction)
 
             coefficient = 0.0001
             kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
@@ -205,14 +206,18 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
 
     img_inputs = keras.Input(shape=(513, 513, 2))
     x = layers.Conv2D(32, 3, padding="same")(img_inputs)
-    x = layers.LeakyReLU()(x)
-    x = layers.MaxPooling2D()(x)
     x = layers.Conv2D(32, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
     x = layers.MaxPooling2D()(x)
     x = layers.Conv2D(32, 3, padding="same")(x)
+    x = layers.Conv2D(32, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
     x = layers.MaxPooling2D()(x)
+    x = layers.Conv2D(32, 3, padding="same")(x)
+    x = layers.Conv2D(32, 3, padding="same")(x)
+    x = layers.LeakyReLU()(x)
+    x = layers.MaxPooling2D()(x)
+    x = layers.Conv2D(32, 3, padding="same")(x)
     x = layers.Conv2D(32, 3, padding="same")(x)
     x = layers.Conv2D(1, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
@@ -226,15 +231,19 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     x = layers.Dense(64 * 64, activation="relu")(latent_inputs)
     x = layers.Reshape((64, 64, 1))(x)
     x = layers.Conv2DTranspose(32, 3, padding="same")(x)
-    x = layers.LeakyReLU()(x)
-    x = layers.UpSampling2D()(x)
     x = layers.Conv2DTranspose(32, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
     x = layers.UpSampling2D()(x)
+    x = layers.Conv2DTranspose(32, 3, padding="same")(x)
+    x = layers.Conv2DTranspose(32, 3, padding="same")(x)
+    x = layers.LeakyReLU()(x)
+    x = layers.UpSampling2D()(x)
+    x = layers.Conv2DTranspose(32, 3, padding="same")(x)
     x = layers.Conv2DTranspose(32, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
     x = layers.UpSampling2D()(x)
     x = layers.ZeroPadding2D(padding=[(0, 1), (0, 1)])(x)
+    x = layers.Conv2DTranspose(32, 3, padding="same")(x)
     x = layers.Conv2DTranspose(32, 3, padding="same")(x)
     x = layers.LeakyReLU()(x)
     decoder_outputs = layers.Conv2DTranspose(2, 3, activation=None, padding="same")(x)
