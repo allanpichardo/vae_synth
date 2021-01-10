@@ -278,8 +278,8 @@ if __name__ == '__main__':
     path = os.path.join(os.path.dirname(__file__), 'samples')
     sr = 44100
     duration = 3.0
-    batch_size = 4
-    latent_dim = 8
+    batch_size = 16
+    latent_dim = 16
 
     sequence = SoundSequence(path, sr=sr, duration=duration, batch_size=batch_size)
 
