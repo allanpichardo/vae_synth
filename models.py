@@ -312,7 +312,7 @@ if __name__ == '__main__':
     # tf.io.write_file('reproduction.wav', repro)
 
     autoencoder.compile(optimizer=keras.optimizers.Adam(learning_rate=0.00005))
-    autoencoder.fit(sequence, epochs=1000, callbacks=[
+    autoencoder.fit(sequence, epochs=100, callbacks=[
         SpectrogramCallback(sequence, sr=sr),
         tf.keras.callbacks.TensorBoard(log_dir=logdir, embeddings_freq=1)
     ])
