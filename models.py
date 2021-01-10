@@ -32,6 +32,9 @@ class SpectrogramCallback(tf.keras.callbacks.Callback):
         print('Mean: {} | Var: {}'.format(self.model.stft.get_layer('normalizer').mean,
                                           self.model.stft.get_layer('normalizer').variance))
 
+    def normalize(self, x):
+        return (x - tf.reduce_min(x)) / (tf.reduce_max(x) - tf.reduce_min(x))
+
     def on_epoch_end(self, epoch, logs=None):
         x, y = self.soundequence.__getitem__(0)
 
@@ -40,14 +43,17 @@ class SpectrogramCallback(tf.keras.callbacks.Callback):
         spec_y = self.model.decoder(embedding)
         audio_y = kapre.InverseSTFT(n_fft=1024)(mag_phase_to_complex(spec_y))
 
+        mag_x = kapre.MagnitudeToDecibel()(kapre.Magnitude()(mag_phase_to_complex(spec_x)))
+        mag_y = kapre.MagnitudeToDecibel()(kapre.Magnitude()(mag_phase_to_complex(spec_y)))
+
         file_writer = tf.summary.create_file_writer(self.logdir)
 
         with file_writer.as_default():
             tf.summary.audio("Sample Input", x, self.sr, step=epoch, max_outputs=5, description="Audio sample input")
-            tf.summary.image("STFT Input", spec_x, step=epoch, max_outputs=5, description="Spectrogram input")
-            tf.summary.image("STFT Reconstruction", spec_y, step=epoch, max_outputs=5,
+            tf.summary.image("STFT Input", self.normalize(mag_x), step=epoch, max_outputs=5, description="Spectrogram input")
+            tf.summary.image("STFT Reconstruction", self.normalize(mag_y), step=epoch, max_outputs=5,
                              description="Spectrogram output")
-            tf.summary.audio("Sample Reconstruction", audio_y, self.sr, step=epoch, max_outputs=5,
+            tf.summary.audio("Sample Reconstruction", librosa.util.normalize(audio_y), self.sr, step=epoch, max_outputs=5,
                              description="Synthesized audio")
 
 
