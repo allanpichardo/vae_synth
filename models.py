@@ -23,12 +23,11 @@ class SpectrogramCallback(tf.keras.callbacks.Callback):
     def on_train_begin(self, logs=None):
         print("Initializing normalize layer...")
 
-        count = 1
+        should_reset = True
         for x, y in self.soundequence:
             spec_x = self.model.stft(x)
-            self.model.stft.get_layer('normalizer').count = count
-            self.model.stft.get_layer('normalizer').adapt(spec_x, reset_state=False)
-            count = count + 1
+            self.model.stft.get_layer('normalizer').adapt(spec_x, reset_state=should_reset)
+            should_reset = False
 
         print('Mean: {} | Var: {}'.format(self.model.stft.get_layer('normalizer').mean,
                                           self.model.stft.get_layer('normalizer').variance))
