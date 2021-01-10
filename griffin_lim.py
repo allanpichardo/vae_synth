@@ -30,6 +30,12 @@ def GriffinLim():
 def STFTNormalize():
     return tf.keras.layers.Lambda(_normalize)
 
+def STFTDenormalize():
+    return tf.keras.layers.Lambda(_denormalize)
+
+def DBToAmp():
+    return tf.keras.layers.Lambda(_db_to_amp)
+
 
 # TF
 def spectrogram2wav(spectrogram, n_iter=griffin_lim_iters, n_fft=1024,

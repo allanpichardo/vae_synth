@@ -9,7 +9,7 @@ from tensorflow import keras
 from tensorflow.keras import layers
 from datetime import datetime
 from tensorboard.plugins import projector
-from griffin_lim import GriffinLim, STFTNormalize
+from griffin_lim import GriffinLim, STFTNormalize, STFTDenormalize, DBToAmp
 
 
 class SpectrogramCallback(tf.keras.callbacks.Callback):
@@ -20,13 +20,21 @@ class SpectrogramCallback(tf.keras.callbacks.Callback):
         self.logdir = logdir
         self.sr = sr
 
+    def on_train_begin(self, logs=None):
+        print("Initializing normalize layer")
+
+        for x, y in self.soundequence:
+            spec_x = self.model.stft(x)
+            self.model.stft.get_layer('normalizer').adapt(spec_x)
+            print('Mean: {} | Var: {}'.format(normalizer.mean_val, normalizer.variance_val))
+
     def on_epoch_end(self, epoch, logs=None):
         x, y = self.soundequence.__getitem__(0)
 
         spec_x = self.model.stft(x)
         embedding = self.model.encoder(spec_x)
         spec_y = self.model.decoder(embedding)
-        audio_y = GriffinLim()(spec_y)
+        audio_y = kapre.InverseSTFT(n_fft=1024)(mag_phase_to_complex(spec_y))
 
         checkpoint = tf.train.Checkpoint(embedding=tf.Variable(embedding))
         checkpoint.save(os.path.join(self.logdir, 'embedding.ckpt'))
@@ -42,8 +50,9 @@ class SpectrogramCallback(tf.keras.callbacks.Callback):
 
         with file_writer.as_default():
             tf.summary.audio("Sample Input", x, self.sr, step=epoch, max_outputs=5, description="Audio sample input")
-            tf.summary.image("STFT Input", norm(spec_x), step=epoch, max_outputs=5, description="Spectrogram input")
-            tf.summary.image("STFT Reconstruction", norm(spec_y), step=epoch, max_outputs=5, description="Spectrogram output")
+            tf.summary.image("STFT Input", spec_x, step=epoch, max_outputs=5, description="Spectrogram input")
+            tf.summary.image("STFT Reconstruction", spec_y, step=epoch, max_outputs=5,
+                             description="Spectrogram output")
             tf.summary.audio("Sample Reconstruction", audio_y, self.sr, step=epoch, max_outputs=5,
                              description="Synthesized audio")
 
@@ -187,6 +196,7 @@ def mag_phase_to_complex(x):
 def get_synth_model(decoder, input_shape=(8,)):
     inputs = keras.Input(shape=input_shape)
     x = decoder(inputs)
+    # x = STFTDenormalize()(x)
     x = layers.Lambda(mag_phase_to_complex)(x)
     x = kapre.InverseSTFT(n_fft=1024)(x)
     return keras.Model(inputs, x, name="synth")
@@ -195,16 +205,13 @@ def get_synth_model(decoder, input_shape=(8,)):
 def get_model(latent_dim=8, sr=44100, duration=3.0):
     input_shape = (int(sr * duration), 1)
     encoder_inputs = keras.Input(shape=input_shape)
-    # x = kapre.STFT(input_shape=input_shape, n_fft=1024)(encoder_inputs)
-    # x = kapre.Magnitude()(x)
-    # x = kapre.MagnitudeToDecibel()(x)
-    x = kapre.composed.get_stft_mag_phase(input_shape, n_fft=1024, return_decibel=True)(encoder_inputs)
-    # x = STFTNormalize()(x)
+    x = kapre.composed.get_stft_mag_phase(input_shape, n_fft=1024, return_decibel=False)(encoder_inputs)
+    x = layers.experimental.preprocessing.Normalization(name='normalizer')(x)
     stft_out = layers.Lambda(lambda m: tf.image.resize_with_crop_or_pad(m, 513, 513))(x)
     stft_model = keras.Model(encoder_inputs, stft_out, name='stft')
 
     img_inputs = keras.Input(shape=(513, 513, 2))
-    x =layers.Conv2D(64, 7, padding="same", strides=2)(img_inputs)
+    x = layers.Conv2D(64, 7, padding="same", strides=2)(img_inputs)
     x = layers.LeakyReLU()(x)
     x = layers.Conv2D(64, 5, padding="same", strides=2)(x)
     x = layers.LeakyReLU()(x)
@@ -274,42 +281,42 @@ if __name__ == '__main__':
     autoencoder.encoder.summary()
     autoencoder.decoder.summary()
 
-    # wav, rate = librosa.load('/Users/allanpichardo/PycharmProjects/audio-generation-autoencoder/FX-Robotio.wav', sr=sr,
-    #                          duration=duration)
-    # wav = tf.convert_to_tensor(wav)
-    # wav = tf.expand_dims(wav, axis=1)
-    # wav = pad_up_to(wav, [int(duration * sr), 1], 0)
-    # wav = tf.expand_dims(wav, axis=0)
-    # stft = autoencoder.stft(wav)
-    # repro = kapre.InverseSTFT(n_fft=1024)(mag_phase_to_complex(stft))
-    # # repro = GriffinLim()(stft)
-    # repro = repro[0]
-    # repro = librosa.util.normalize(repro)
-    # repro = tf.audio.encode_wav(repro, rate)
-    # tf.io.write_file('reproduction.wav', repro)
+    wav, rate = librosa.load('/Users/allanpichardo/PycharmProjects/audio-generation-autoencoder/FX-Robotio.wav', sr=sr,
+                             duration=duration)
+    wav = tf.convert_to_tensor(wav)
+    wav = tf.expand_dims(wav, axis=1)
+    wav = pad_up_to(wav, [int(duration * sr), 1], 0)
+    wav = tf.expand_dims(wav, axis=0)
+    stft = autoencoder.stft(wav)
+    repro = kapre.InverseSTFT(n_fft=1024)(mag_phase_to_complex(stft))
+    # repro = GriffinLim()(stft)
+    repro = repro[0]
+    repro = librosa.util.normalize(repro)
+    repro = tf.audio.encode_wav(repro, rate)
+    tf.io.write_file('reproduction.wav', repro)
 
-    autoencoder.compile(optimizer=keras.optimizers.Adam(learning_rate=0.0005))
-    autoencoder.fit(sequence, epochs=50, callbacks=[
-        SpectrogramCallback(sequence, sr=sr),
-        tf.keras.callbacks.TensorBoard(log_dir=logdir)
-    ])
-
-    if not os.path.exists(os.path.join(os.path.dirname(__file__), 'models')):
-        os.makedirs(os.path.join(os.path.dirname(__file__), 'models'), exist_ok=True)
-
-    autoencoder.stft.save(stft_model_path, save_format='tf', include_optimizer=False)
-    autoencoder.encoder.save(enc_model_path, save_format='tf', include_optimizer=False)
-    autoencoder.decoder.save(dec_model_path, save_format='tf', include_optimizer=False)
-
-    synth = get_synth_model(autoencoder.decoder)
-    synth.summary()
+    # autoencoder.compile(optimizer=keras.optimizers.Adam(learning_rate=0.0005))
+    # autoencoder.fit(sequence, epochs=50, callbacks=[
+    #     SpectrogramCallback(sequence, sr=sr),
+    #     tf.keras.callbacks.TensorBoard(log_dir=logdir)
+    # ])
     #
-    random = tf.random.normal([5, latent_dim])
-    wavs = synth.predict_on_batch(random)
-
-    i = 0
-    for wav in wavs:
-        wav = librosa.util.normalize(wav)
-        wav = tf.audio.encode_wav(wav, sr)
-        tf.io.write_file('output-{}.wav'.format(i), wav)
-        i = i + 1
+    # if not os.path.exists(os.path.join(os.path.dirname(__file__), 'models')):
+    #     os.makedirs(os.path.join(os.path.dirname(__file__), 'models'), exist_ok=True)
+    #
+    # autoencoder.stft.save(stft_model_path, save_format='tf', include_optimizer=False)
+    # autoencoder.encoder.save(enc_model_path, save_format='tf', include_optimizer=False)
+    # autoencoder.decoder.save(dec_model_path, save_format='tf', include_optimizer=False)
+    #
+    # synth = get_synth_model(autoencoder.decoder)
+    # synth.summary()
+    # #
+    # random = tf.random.normal([5, latent_dim])
+    # wavs = synth.predict_on_batch(random)
+    #
+    # i = 0
+    # for wav in wavs:
+    #     wav = librosa.util.normalize(wav)
+    #     wav = tf.audio.encode_wav(wav, sr)
+    #     tf.io.write_file('output-{}.wav'.format(i), wav)
+    #     i = i + 1
