@@ -26,7 +26,7 @@ class SpectrogramCallback(tf.keras.callbacks.Callback):
         for x, y in self.soundequence:
             spec_x = self.model.stft(x)
             self.model.stft.get_layer('normalizer').adapt(spec_x)
-            print('Mean: {} | Var: {}'.format(normalizer.mean_val, normalizer.variance_val))
+            print('Mean: {} | Var: {}'.format( self.model.stft.get_layer('normalizer').mean_val,  self.model.stft.get_layer('normalizer').variance_val))
 
     def on_epoch_end(self, epoch, logs=None):
         x, y = self.soundequence.__getitem__(0)
@@ -44,9 +44,6 @@ class SpectrogramCallback(tf.keras.callbacks.Callback):
         projector.visualize_embeddings(self.logdir, config)
 
         file_writer = tf.summary.create_file_writer(self.logdir)
-
-        norm = layers.experimental.preprocessing.Normalization()
-        norm.adapt(spec_x)
 
         with file_writer.as_default():
             tf.summary.audio("Sample Input", x, self.sr, step=epoch, max_outputs=5, description="Audio sample input")
