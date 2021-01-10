@@ -281,42 +281,42 @@ if __name__ == '__main__':
     autoencoder.encoder.summary()
     autoencoder.decoder.summary()
 
-    wav, rate = librosa.load('/Users/allanpichardo/PycharmProjects/audio-generation-autoencoder/FX-Robotio.wav', sr=sr,
-                             duration=duration)
-    wav = tf.convert_to_tensor(wav)
-    wav = tf.expand_dims(wav, axis=1)
-    wav = pad_up_to(wav, [int(duration * sr), 1], 0)
-    wav = tf.expand_dims(wav, axis=0)
-    stft = autoencoder.stft(wav)
-    repro = kapre.InverseSTFT(n_fft=1024)(mag_phase_to_complex(stft))
-    # repro = GriffinLim()(stft)
-    repro = repro[0]
-    repro = librosa.util.normalize(repro)
-    repro = tf.audio.encode_wav(repro, rate)
-    tf.io.write_file('reproduction.wav', repro)
+    # wav, rate = librosa.load('/Users/allanpichardo/PycharmProjects/audio-generation-autoencoder/FX-Robotio.wav', sr=sr,
+    #                          duration=duration)
+    # wav = tf.convert_to_tensor(wav)
+    # wav = tf.expand_dims(wav, axis=1)
+    # wav = pad_up_to(wav, [int(duration * sr), 1], 0)
+    # wav = tf.expand_dims(wav, axis=0)
+    # stft = autoencoder.stft(wav)
+    # repro = kapre.InverseSTFT(n_fft=1024)(mag_phase_to_complex(stft))
+    # # repro = GriffinLim()(stft)
+    # repro = repro[0]
+    # repro = librosa.util.normalize(repro)
+    # repro = tf.audio.encode_wav(repro, rate)
+    # tf.io.write_file('reproduction.wav', repro)
 
-    # autoencoder.compile(optimizer=keras.optimizers.Adam(learning_rate=0.0005))
-    # autoencoder.fit(sequence, epochs=50, callbacks=[
-    #     SpectrogramCallback(sequence, sr=sr),
-    #     tf.keras.callbacks.TensorBoard(log_dir=logdir)
-    # ])
+    autoencoder.compile(optimizer=keras.optimizers.Adam(learning_rate=0.0005))
+    autoencoder.fit(sequence, epochs=50, callbacks=[
+        SpectrogramCallback(sequence, sr=sr),
+        tf.keras.callbacks.TensorBoard(log_dir=logdir)
+    ])
+
+    if not os.path.exists(os.path.join(os.path.dirname(__file__), 'models')):
+        os.makedirs(os.path.join(os.path.dirname(__file__), 'models'), exist_ok=True)
+
+    autoencoder.stft.save(stft_model_path, save_format='tf', include_optimizer=False)
+    autoencoder.encoder.save(enc_model_path, save_format='tf', include_optimizer=False)
+    autoencoder.decoder.save(dec_model_path, save_format='tf', include_optimizer=False)
+
+    synth = get_synth_model(autoencoder.decoder)
+    synth.summary()
     #
-    # if not os.path.exists(os.path.join(os.path.dirname(__file__), 'models')):
-    #     os.makedirs(os.path.join(os.path.dirname(__file__), 'models'), exist_ok=True)
-    #
-    # autoencoder.stft.save(stft_model_path, save_format='tf', include_optimizer=False)
-    # autoencoder.encoder.save(enc_model_path, save_format='tf', include_optimizer=False)
-    # autoencoder.decoder.save(dec_model_path, save_format='tf', include_optimizer=False)
-    #
-    # synth = get_synth_model(autoencoder.decoder)
-    # synth.summary()
-    # #
-    # random = tf.random.normal([5, latent_dim])
-    # wavs = synth.predict_on_batch(random)
-    #
-    # i = 0
-    # for wav in wavs:
-    #     wav = librosa.util.normalize(wav)
-    #     wav = tf.audio.encode_wav(wav, sr)
-    #     tf.io.write_file('output-{}.wav'.format(i), wav)
-    #     i = i + 1
+    random = tf.random.normal([5, latent_dim])
+    wavs = synth.predict_on_batch(random)
+
+    i = 0
+    for wav in wavs:
+        wav = librosa.util.normalize(wav)
+        wav = tf.audio.encode_wav(wav, sr)
+        tf.io.write_file('output-{}.wav'.format(i), wav)
+        i = i + 1
