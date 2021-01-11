@@ -291,20 +291,6 @@ if __name__ == '__main__':
     autoencoder.encoder.summary()
     autoencoder.decoder.summary()
 
-    # wav, rate = librosa.load('/Users/allanpichardo/PycharmProjects/audio-generation-autoencoder/FX-Robotio.wav', sr=sr,
-    #                          duration=duration)
-    # wav = tf.convert_to_tensor(wav)
-    # wav = tf.expand_dims(wav, axis=1)
-    # wav = pad_up_to(wav, [int(duration * sr), 1], 0)
-    # wav = tf.expand_dims(wav, axis=0)
-    # stft = autoencoder.stft(wav)
-    # repro = kapre.InverseSTFT()(mag_phase_to_complex(stft))
-    # # repro = GriffinLim()(stft)
-    # repro = repro[0]
-    # repro = librosa.util.normalize(repro)
-    # repro = tf.audio.encode_wav(repro, rate)
-    # tf.io.write_file('reproduction.wav', repro)
-
     autoencoder.compile(optimizer=keras.optimizers.Adam(learning_rate=0.00005))
     autoencoder.fit(sequence, epochs=100, callbacks=[
         SpectrogramCallback(sequence, sr=sr),
