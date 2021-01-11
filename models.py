@@ -242,10 +242,11 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     encoder = keras.Model(img_inputs, [z_mean, z_log_var, z], name="encoder")
 
     latent_inputs = keras.Input(shape=(latent_dim,))
-    x = layers.Dense(32 * 32, activation="relu")(latent_inputs)
-    x = layers.Dense(256, activation='relu')(x)
+    # x = layers.Dense(32 * 32, activation="relu")(latent_inputs)
+    x = layers.Dense(256, activation='relu')(latent_inputs)
     x = layers.Dense(512, activation='relu')(x)
     x = layers.Dense(1024, activation='relu')(x)
+    x = layers.Dense(32 * 32, activation='relu')(x)
     x = layers.Reshape((32, 32, 1))(x)
     x = layers.Conv2DTranspose(16, 3, padding="same")(x)
     x = layers.ReLU()(x)
