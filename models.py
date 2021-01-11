@@ -165,13 +165,13 @@ class VAE(keras.Model):
             z_mean, z_log_var, z = self.encoder(stft_out)
             reconstruction = self.decoder(z)
 
-            reconstruction_loss = tf.sqrt(
-                tf.divide(
-                    tf.reduce_sum(tf.square(stft_out - reconstruction)),
-                    tf.reduce_sum(tf.square(stft_out))
-                )
-            )
-            # reconstruction_loss = tf.keras.losses.MeanAbsoluteError()(stft_out, reconstruction)
+            # reconstruction_loss = tf.sqrt(
+            #     tf.divide(
+            #         tf.reduce_sum(tf.square(stft_out - reconstruction)),
+            #         tf.reduce_sum(tf.square(stft_out))
+            #     )
+            # )
+            reconstruction_loss = tf.keras.losses.MeanAbsoluteError()(stft_out, reconstruction)
 
             coefficient = 0.0001
             kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
@@ -205,12 +205,6 @@ def get_synth_model(decoder, input_shape=(8,)):
     return keras.Model(inputs, x, name="synth")
 
 
-def get_sample_model(latent_dim=8, sr=44100, duration=1.0):
-    input_shape = (int(sr * duration), 1)
-    encoder_inputs = keras.Input(shape=input_shape)
-
-
-
 def get_model(latent_dim=8, sr=44100, duration=3.0):
     input_shape = (int(sr * duration), 1)
     encoder_inputs = keras.Input(shape=input_shape)
@@ -242,7 +236,6 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     encoder = keras.Model(img_inputs, [z_mean, z_log_var, z], name="encoder")
 
     latent_inputs = keras.Input(shape=(latent_dim,))
-    # x = layers.Dense(32 * 32, activation="relu")(latent_inputs)
     x = layers.Dense(256, activation='relu')(latent_inputs)
     x = layers.Dense(512, activation='relu')(x)
     x = layers.Dense(1024, activation='relu')(x)
