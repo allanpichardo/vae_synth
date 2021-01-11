@@ -190,7 +190,8 @@ class VAE(keras.Model):
         }
 
 
-def mag_phase_to_complex(x):
+def mag_phase_to_complex(x, mean=[0.1928852, 0.00132339], var=[4.575152, 1.8032672]):
+    x = (x * tf.sqrt(var)) + mean
     m, p = tf.split(x, 2, axis=3)
     real = m * tf.cos(p)
     imag = m * tf.sin(p)
@@ -226,18 +227,12 @@ def get_model(latent_dim=8, sr=44100, duration=3.0, spectrogram_shape=(257, 257)
     x = layers.Conv2D(16, 3, padding="same")(x)
     x = layers.ReLU()(x)
     x = layers.Flatten()(x)
-    # x = layers.Dense(1024, activation='relu')(x)
-    # x = layers.Dense(512, activation='relu')(x)
-    # x = layers.Dense(256, activation='relu')(x)
     z_mean = layers.Dense(latent_dim, name="z_mean", activation=None)(x)
     z_log_var = layers.Dense(latent_dim, name="z_log_var", activation=None)(x)
     z = Sampling()([z_mean, z_log_var])
     encoder = keras.Model(img_inputs, [z_mean, z_log_var, z], name="encoder")
 
     latent_inputs = keras.Input(shape=(latent_dim,))
-    # x = layers.Dense(256, activation='relu')(latent_inputs)
-    # x = layers.Dense(512, activation='relu')(x)
-    # x = layers.Dense(1024, activation='relu')(x)
     x = layers.Dense(10 * 128 * 16, activation='relu')(latent_inputs)
     x = layers.Reshape((10, 128, 16))(x)
     x = layers.Conv2DTranspose(16, 3, padding="same")(x)
