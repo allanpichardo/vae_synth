@@ -11,7 +11,7 @@ from datetime import datetime
 from tensorboard.plugins import projector
 from griffin_lim import GriffinLim, STFTNormalize, STFTDenormalize, DBToAmp
 
-N_FFT = 512
+N_FFT = 2048
 
 
 class SpectrogramCallback(tf.keras.callbacks.Callback):
@@ -205,15 +205,15 @@ def get_synth_model(decoder, input_shape=(8,)):
     return keras.Model(inputs, x, name="synth")
 
 
-def get_model(latent_dim=8, sr=44100, duration=3.0):
+def get_model(latent_dim=8, sr=44100, duration=3.0, spectrogram_shape=(257, 257)):
     input_shape = (int(sr * duration), 1)
     encoder_inputs = keras.Input(shape=input_shape)
     x = kapre.composed.get_stft_mag_phase(input_shape, n_fft=N_FFT, return_decibel=False)(encoder_inputs)
     x = layers.experimental.preprocessing.Normalization(name='normalizer')(x)
-    stft_out = layers.Lambda(lambda m: tf.image.resize_with_crop_or_pad(m, 257, 257))(x)
+    stft_out = layers.Lambda(lambda m: tf.image.resize_with_crop_or_pad(m, spectrogram_shape[0], spectrogram_shape[1]))(x)
     stft_model = keras.Model(encoder_inputs, stft_out, name='stft')
 
-    img_inputs = keras.Input(shape=(257, 257, 2))
+    img_inputs = keras.Input(shape=(spectrogram_shape[0], spectrogram_shape[1], 2))
     x = layers.Conv2D(16, 3, padding="same")(img_inputs)
     x = layers.ReLU()(x)
     x = layers.AveragePooling2D()(x)
@@ -226,20 +226,20 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     x = layers.Conv2D(16, 3, padding="same")(x)
     x = layers.ReLU()(x)
     x = layers.Flatten()(x)
-    x = layers.Dense(1024, activation='relu')(x)
-    x = layers.Dense(512, activation='relu')(x)
-    x = layers.Dense(256, activation='relu')(x)
+    # x = layers.Dense(1024, activation='relu')(x)
+    # x = layers.Dense(512, activation='relu')(x)
+    # x = layers.Dense(256, activation='relu')(x)
     z_mean = layers.Dense(latent_dim, name="z_mean", activation=None)(x)
     z_log_var = layers.Dense(latent_dim, name="z_log_var", activation=None)(x)
     z = Sampling()([z_mean, z_log_var])
     encoder = keras.Model(img_inputs, [z_mean, z_log_var, z], name="encoder")
 
     latent_inputs = keras.Input(shape=(latent_dim,))
-    x = layers.Dense(256, activation='relu')(latent_inputs)
-    x = layers.Dense(512, activation='relu')(x)
-    x = layers.Dense(1024, activation='relu')(x)
-    x = layers.Dense(32 * 32 * 16, activation='relu')(x)
-    x = layers.Reshape((32, 32, 16))(x)
+    # x = layers.Dense(256, activation='relu')(latent_inputs)
+    # x = layers.Dense(512, activation='relu')(x)
+    # x = layers.Dense(1024, activation='relu')(x)
+    x = layers.Dense(10 * 128 * 16, activation='relu')(latent_inputs)
+    x = layers.Reshape((10, 128, 16))(x)
     x = layers.Conv2DTranspose(16, 3, padding="same")(x)
     x = layers.ReLU()(x)
     x = layers.UpSampling2D(interpolation="nearest")(x)
@@ -249,7 +249,7 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     x = layers.Conv2DTranspose(16, 3, padding="same")(x)
     x = layers.ReLU()(x)
     x = layers.UpSampling2D(interpolation="nearest")(x)
-    x = layers.ZeroPadding2D(padding=[(0, 1), (0, 1)])(x)
+    x = layers.ZeroPadding2D(padding=[(0, 0), (0, 1)])(x)
     x = layers.Conv2DTranspose(16, 3, padding="same")(x)
     x = layers.ReLU()(x)
     decoder_outputs = layers.Conv2DTranspose(2, 3, activation=None, padding="same")(x)
@@ -278,6 +278,7 @@ if __name__ == '__main__':
     duration = 1.0
     batch_size = 4
     latent_dim = 8
+    spectrogram_shape = (80, 1025)
 
     sequence = SoundSequence(path, sr=sr, duration=duration, batch_size=batch_size)
 
@@ -289,7 +290,7 @@ if __name__ == '__main__':
             tf.keras.models.load_model(dec_model_path, compile=False)
         )
     else:
-        autoencoder = get_model(latent_dim=latent_dim, sr=sr, duration=duration)
+        autoencoder = get_model(latent_dim=latent_dim, sr=sr, duration=duration, spectrogram_shape=spectrogram_shape)
 
     autoencoder.stft.summary()
     autoencoder.encoder.summary()
