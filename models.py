@@ -234,6 +234,8 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     x = layers.ReLU()(x)
     x = layers.Flatten()(x)
     x = layers.Dense(1024, activation='relu')(x)
+    x = layers.Dense(512, activation='relu')(x)
+    x = layers.Dense(256, activation='relu')(x)
     z_mean = layers.Dense(latent_dim, name="z_mean", activation=None)(x)
     z_log_var = layers.Dense(latent_dim, name="z_log_var", activation=None)(x)
     z = Sampling()([z_mean, z_log_var])
@@ -241,6 +243,8 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
 
     latent_inputs = keras.Input(shape=(latent_dim,))
     x = layers.Dense(32 * 32, activation="relu")(latent_inputs)
+    x = layers.Dense(256, activation='relu')(x)
+    x = layers.Dense(512, activation='relu')(x)
     x = layers.Dense(1024, activation='relu')(x)
     x = layers.Reshape((32, 32, 1))(x)
     x = layers.Conv2DTranspose(16, 3, padding="same")(x)
@@ -255,7 +259,7 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     x = layers.ZeroPadding2D(padding=[(0, 1), (0, 1)])(x)
     x = layers.Conv2DTranspose(16, 3, padding="same")(x)
     x = layers.ReLU()(x)
-    decoder_outputs = layers.Conv2DTranspose(2, 3, activation="tanh", padding="same")(x)
+    decoder_outputs = layers.Conv2DTranspose(2, 3, activation=None, padding="same")(x)
     decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
 
     vae = VAE(stft_model, encoder, decoder)
