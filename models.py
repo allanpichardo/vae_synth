@@ -255,7 +255,7 @@ def get_model(latent_dim=8, sr=44100, duration=3.0):
     x = layers.ZeroPadding2D(padding=[(0, 1), (0, 1)])(x)
     x = layers.Conv2DTranspose(16, 3, padding="same")(x)
     x = layers.ReLU()(x)
-    decoder_outputs = layers.Conv2DTranspose(2, 3, activation=None, padding="same")(x)
+    decoder_outputs = layers.Conv2DTranspose(2, 3, activation="tanh", padding="same")(x)
     decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
 
     vae = VAE(stft_model, encoder, decoder)
