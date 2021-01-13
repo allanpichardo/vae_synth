@@ -1,126 +1,13 @@
-import os
-from glob import glob
-
 import kapre
-import librosa
-import numpy as np
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
-from datetime import datetime
-from tensorboard.plugins import projector
-from griffin_lim import GriffinLim, STFTNormalize, STFTDenormalize, DBToAmp
 
-N_FFT = 2048
-
-
-class SpectrogramCallback(tf.keras.callbacks.Callback):
-
-    def __init__(self, soundsequence, sr=44100, logdir="logs/" + datetime.now().strftime("%Y%m%d-%H%M%S")):
-        super().__init__()
-        self.soundequence = soundsequence
-        self.logdir = logdir
-        self.sr = sr
-
-    def on_train_begin(self, logs=None):
-        print("Initializing normalize layer...")
-
-        should_reset = True
-        for x, y in self.soundequence:
-            spec_x = self.model.stft(x)
-            self.model.stft.get_layer('normalizer').adapt(spec_x, reset_state=should_reset)
-            should_reset = False
-
-        print('Mean: {} | Var: {}'.format(self.model.stft.get_layer('normalizer').mean,
-                                          self.model.stft.get_layer('normalizer').variance))
-
-    def normalize(self, x):
-        return (x - tf.reduce_min(x)) / (tf.reduce_max(x) - tf.reduce_min(x))
-
-    def on_epoch_end(self, epoch, logs=None):
-        x, y = self.soundequence.__getitem__(0)
-
-        spec_x = self.model.stft(x)
-        embedding = self.model.encoder(spec_x)
-        spec_y = self.model.decoder(embedding)
-        audio_y = kapre.InverseSTFT(n_fft=N_FFT)(mag_phase_to_complex(spec_y))
-
-        mag_x = kapre.MagnitudeToDecibel()(kapre.Magnitude()(mag_phase_to_complex(spec_x)))
-        mag_y = kapre.MagnitudeToDecibel()(kapre.Magnitude()(mag_phase_to_complex(spec_y)))
-
-        file_writer = tf.summary.create_file_writer(self.logdir)
-
-        with file_writer.as_default():
-            tf.summary.audio("Sample Input", tf.cast(x, tf.float32), self.sr, step=epoch, max_outputs=5, description="Audio sample input")
-            tf.summary.image("STFT Input", self.normalize(mag_x), step=epoch, max_outputs=5, description="Spectrogram input")
-            tf.summary.image("STFT Reconstruction", self.normalize(mag_y), step=epoch, max_outputs=5,
-                             description="Spectrogram output")
-            tf.summary.audio("Sample Reconstruction", tf.cast(librosa.util.normalize(audio_y), tf.float32), self.sr, step=epoch, max_outputs=5,
-                             description="Synthesized audio")
-
-
-class SoundSequence(tf.keras.utils.Sequence):
-
-    def __init__(self, music_path, n_fft=N_FFT, sr=44100, duration=2.0, batch_size=32, shuffle=True):
-        """
-        Create a data generator that reads wav files from a directory
-        :param music_path:
-        :param duration: duration of sound clips
-        :param batch_size:
-        :param shuffle:
-        """
-        self.sr = sr
-        self.duration = duration
-        self.batch_size = batch_size
-        self.shuffle = shuffle
-
-        self.wav_paths = glob(os.path.join(music_path, '*', '*'))
-        self.labels = []
-        for path in self.wav_paths:
-            real_label = os.path.basename(os.path.dirname(path))
-            self.labels.append(real_label)
-
-        self.on_epoch_end()
-
-    def __getitem__(self, index):
-        indexes = self.indexes[index * self.batch_size:(index + 1) * self.batch_size]
-
-        wav_paths = [self.wav_paths[k] for k in indexes]
-        labels = [self.labels[k] for k in indexes]
-
-        X = []
-        Y = []
-
-        for i, (path, label) in enumerate(zip(wav_paths, labels)):
-            wav, rate = librosa.load(path, sr=self.sr, duration=self.duration, res_type='kaiser_fast')
-            wav = tf.convert_to_tensor(wav)
-            wav = tf.cast(wav, tf.float16)
-            wav = tf.expand_dims(wav, 1)
-            wav = self.pad_up_to(wav, [rate * int(self.duration), 1], 0)
-            X.append(wav)
-            Y.append(tf.convert_to_tensor(label))
-
-        X = tf.stack(X)
-        Y = tf.stack(Y)
-
-        return X, Y
-
-    def __len__(self):
-        return int(np.floor(len(self.wav_paths) / float(self.batch_size)))
-
-    def pad_up_to(self, t, max_in_dims, constant_values):
-        s = tf.shape(t)
-        paddings = [[0, m - s[i]] for (i, m) in enumerate(max_in_dims)]
-        return tf.pad(t, paddings, 'CONSTANT', constant_values=constant_values)
-
-    def on_epoch_end(self):
-        self.indexes = np.arange(len(self.wav_paths))
-        if self.shuffle:
-            np.random.shuffle(self.indexes)
+from utils import mag_phase_to_complex
 
 
 class Sampling(layers.Layer):
-    """Uses (z_mean, z_log_var) to sample z, the vector encoding a digit."""
+    """Uses (z_mean, z_log_var) to sample z, the vector encoding the STFT."""
 
     def call(self, inputs):
         z_mean, z_log_var = inputs
@@ -165,12 +52,6 @@ class VAE(keras.Model):
             z_mean, z_log_var, z = self.encoder(stft_out)
             reconstruction = self.decoder(z)
 
-            # reconstruction_loss = tf.sqrt(
-            #     tf.divide(
-            #         tf.reduce_sum(tf.square(stft_out - reconstruction)),
-            #         tf.reduce_sum(tf.square(stft_out))
-            #     )
-            # )
             reconstruction_loss = tf.keras.losses.MeanAbsoluteError()(stft_out, reconstruction)
 
             coefficient = 0.0001
@@ -190,28 +71,22 @@ class VAE(keras.Model):
         }
 
 
-def mag_phase_to_complex(x, mean=[0.1928852, 0.00132339], var=[4.575152, 1.8032672]):
-    x = (x * tf.sqrt(var)) + mean
-    m, p = tf.split(x, 2, axis=3)
-    real = m * tf.cos(p)
-    imag = m * tf.sin(p)
-    return tf.complex(real, imag)
-
-
-def get_synth_model(decoder, input_shape=(8,)):
+def get_synth_model(decoder, input_shape=(8,), n_fft=2048):
     inputs = keras.Input(shape=input_shape)
     x = decoder(inputs)
     x = layers.Lambda(mag_phase_to_complex)(x)
-    x = kapre.InverseSTFT(n_fft=N_FFT)(x)
+    x = kapre.InverseSTFT(n_fft=n_fft)(x)
+    x = layers.Lambda(lambda h: tf.cast(h, tf.float32))(x)
     return keras.Model(inputs, x, name="synth")
 
 
-def get_model(latent_dim=8, sr=44100, duration=3.0, spectrogram_shape=(257, 257)):
+def get_model(latent_dim=8, sr=44100, duration=1.0, spectrogram_shape=(80, 1025), n_fft=2048):
     input_shape = (int(sr * duration), 1)
     encoder_inputs = keras.Input(shape=input_shape)
-    x = kapre.composed.get_stft_mag_phase(input_shape, n_fft=N_FFT, return_decibel=False)(encoder_inputs)
+    x = kapre.composed.get_stft_mag_phase(input_shape, n_fft=n_fft, return_decibel=False)(encoder_inputs)
     x = layers.experimental.preprocessing.Normalization(name='normalizer')(x)
-    stft_out = layers.Lambda(lambda m: tf.image.resize_with_crop_or_pad(m, spectrogram_shape[0], spectrogram_shape[1]))(x)
+    stft_out = layers.Lambda(lambda m: tf.image.resize_with_crop_or_pad(m, spectrogram_shape[0], spectrogram_shape[1]))(
+        x)
     stft_model = keras.Model(encoder_inputs, stft_out, name='stft')
 
     img_inputs = keras.Input(shape=(spectrogram_shape[0], spectrogram_shape[1], 2))
@@ -255,65 +130,4 @@ def get_model(latent_dim=8, sr=44100, duration=3.0, spectrogram_shape=(257, 257)
     return vae
 
 
-def pad_up_to(t, max_in_dims, constant_values):
-    s = tf.shape(t)
-    paddings = [[0, m - s[i]] for (i, m) in enumerate(max_in_dims)]
-    return tf.pad(t, paddings, 'CONSTANT', constant_values=constant_values)
 
-
-if __name__ == '__main__':
-    logdir = os.path.join(os.path.dirname(__file__), 'logs', datetime.now().strftime("%Y%m%d-%H%M%S"))
-
-    stft_model_path = os.path.join(os.path.dirname(__file__), 'models', 'stft_mod_v{}'.format(1))
-    enc_model_path = os.path.join(os.path.dirname(__file__), 'models', 'enc_mod_v{}'.format(1))
-    dec_model_path = os.path.join(os.path.dirname(__file__), 'models', 'dec_mod_v{}'.format(1))
-
-    path = os.path.join(os.path.dirname(__file__), 'samples')
-    sr = 44100
-    duration = 1.0
-    batch_size = 4
-    latent_dim = 8
-    spectrogram_shape = (80, 1025)
-
-    sequence = SoundSequence(path, sr=sr, duration=duration, batch_size=batch_size)
-
-    autoencoder = None
-    if os.path.exists(stft_model_path) and os.path.exists(enc_model_path) and os.path.exists(dec_model_path):
-        autoencoder = VAE(
-            tf.keras.models.load_model(stft_model_path, compile=False),
-            tf.keras.models.load_model(enc_model_path, compile=False),
-            tf.keras.models.load_model(dec_model_path, compile=False)
-        )
-    else:
-        autoencoder = get_model(latent_dim=latent_dim, sr=sr, duration=duration, spectrogram_shape=spectrogram_shape)
-
-    autoencoder.stft.summary()
-    autoencoder.encoder.summary()
-    autoencoder.decoder.summary()
-
-    autoencoder.compile(optimizer=keras.optimizers.Adam(learning_rate=0.00005))
-    autoencoder.fit(sequence, epochs=100, callbacks=[
-        SpectrogramCallback(sequence, sr=sr),
-        tf.keras.callbacks.TensorBoard(log_dir=logdir, embeddings_freq=1)
-    ])
-
-    if not os.path.exists(os.path.join(os.path.dirname(__file__), 'models')):
-        os.makedirs(os.path.join(os.path.dirname(__file__), 'models'), exist_ok=True)
-
-    autoencoder.stft.save(stft_model_path, save_format='tf', include_optimizer=False)
-    autoencoder.encoder.save(enc_model_path, save_format='tf', include_optimizer=False)
-    autoencoder.decoder.save(dec_model_path, save_format='tf', include_optimizer=False)
-
-    synth = get_synth_model(autoencoder.decoder, input_shape=(latent_dim,))
-    synth.summary()
-    #
-    random = tf.random.normal([5, latent_dim])
-    wavs = synth.predict_on_batch(random)
-
-    i = 0
-    for wav in wavs:
-        wav = librosa.util.normalize(wav)
-        wav = tf.cast(wav, tf.float32)
-        wav = tf.audio.encode_wav(wav, sr)
-        tf.io.write_file('output-{}.wav'.format(i), wav)
-        i = i + 1
