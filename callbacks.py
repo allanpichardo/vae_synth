@@ -34,7 +34,7 @@ class SpectrogramCallback(tf.keras.callbacks.Callback):
         x, y = self.soundequence.__getitem__(0)
 
         spec_x = self.model.stft(x)
-        embedding = self.model.encoder(spec_x)
+        u, v, embedding = self.model.encoder(spec_x)
         spec_y = self.model.decoder(embedding)
         audio_y = kapre.InverseSTFT(n_fft=self.n_fft)(mag_phase_to_complex(spec_y))
 
