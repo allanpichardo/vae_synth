@@ -39,7 +39,7 @@ if __name__ == '__main__':
 
     autoencoder.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.00005))
     autoencoder.fit(sequence, epochs=100, callbacks=[
-        SpectrogramCallback(sequence, sr=sr),
+        SpectrogramCallback(sequence, sr=sr, logdir=logdir),
         tf.keras.callbacks.TensorBoard(log_dir=logdir, embeddings_freq=1)
     ])
 

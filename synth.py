@@ -7,7 +7,7 @@ import os
 decoder = tf.keras.models.load_model('models/dec_mod_v1')
 synth = get_synth_model(decoder)
 
-random = tf.random.normal([25, 8])
+random = tf.random.normal([25, 8], 0.0, 10.0)
 wavs = synth.predict_on_batch(random)
 
 i = 0
