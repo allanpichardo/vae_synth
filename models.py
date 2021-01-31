@@ -52,7 +52,13 @@ class VAE(keras.Model):
             z_mean, z_log_var, z = self.encoder(stft_out)
             reconstruction = self.decoder(z)
 
-            reconstruction_loss = tf.keras.losses.MeanSquaredError()(stft_out, reconstruction)
+            # reconstruction_loss = tf.keras.losses.MeanSquaredError()(stft_out, reconstruction)
+            reconstruction_loss = tf.sqrt(
+                tf.divide(
+                    tf.reduce_sum(tf.square(stft_out - reconstruction)),
+                    tf.reduce_sum(tf.square(stft_out))
+                )
+            )
 
             coefficient = 0.0001
             kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
