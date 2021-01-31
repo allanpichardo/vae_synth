@@ -18,7 +18,7 @@ if __name__ == '__main__':
     sr = 44100
     duration = 1.0
     batch_size = 16
-    latent_dim = 8
+    latent_dim = 16
     spectrogram_shape = (80, 1025)
     epochs = 200
 
