@@ -80,7 +80,7 @@ def residual_module(layer_in, n_filters):
     # conv1
     conv1 = tf.keras.layers.Conv2D(n_filters, (5, 5), padding='same', activation='relu', kernel_initializer='he_normal')(layer_in)
     # conv2
-    conv2 = tf.keras.layers.Conv2D(n_filters, (5, 5), padding='same', activation='relu', kernel_initializer='he_normal')(conv1)
+    conv2 = tf.keras.layers.Conv2D(n_filters, (5, 5), padding='same', activation='linear', kernel_initializer='he_normal')(conv1)
     # conv3
     # conv3 = tf.keras.layers.Conv2D(n_filters, (5, 5), padding='same', activation='linear',
     #                                kernel_initializer='he_normal')(conv2)
@@ -103,7 +103,7 @@ def residual_transpose_module(layer_in, n_filters):
     # conv1
     conv1 = tf.keras.layers.Conv2DTranspose(n_filters, (5, 5), padding='same', activation='relu', kernel_initializer='he_normal')(layer_in)
     # conv2
-    conv2 = tf.keras.layers.Conv2DTranspose(n_filters, (5, 5), padding='same', activation='relu', kernel_initializer='he_normal')(conv1)
+    conv2 = tf.keras.layers.Conv2DTranspose(n_filters, (5, 5), padding='same', activation='linear', kernel_initializer='he_normal')(conv1)
     # conv3
     # conv3 = tf.keras.layers.Conv2DTranspose(n_filters, (5, 5), padding='same', activation='linear',
     #                                         kernel_initializer='he_normal')(conv2)
