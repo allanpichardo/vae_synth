@@ -87,9 +87,9 @@ def residual_module(layer_in, n_filters):
     # add filters, assumes filters/channels last
     layer_out = tf.keras.layers.Add()([conv3, merge_input])
     # activation function
-    layer_out = tf.keras.layers.Conv2D(n_filters, (1, 1), padding='same', kernel_initializer='he_normal')(
-        layer_out)
-    layer_out = tf.keras.layers.BatchNormalization()(layer_out)
+    # layer_out = tf.keras.layers.Conv2D(n_filters, (1, 1), padding='same', kernel_initializer='he_normal')(
+    #     layer_out)
+    # layer_out = tf.keras.layers.BatchNormalization()(layer_out)
     layer_out = tf.keras.layers.Activation('relu')(layer_out)
     return layer_out
 
@@ -110,8 +110,8 @@ def residual_transpose_module(layer_in, n_filters):
     # add filters, assumes filters/channels last
     layer_out = tf.keras.layers.Add()([conv3, merge_input])
     # activation function
-    layer_out = tf.keras.layers.Conv2DTranspose(n_filters, (1, 1), padding='same', kernel_initializer='he_normal')(layer_out)
-    layer_out = tf.keras.layers.BatchNormalization()(layer_out)
+    # layer_out = tf.keras.layers.Conv2DTranspose(n_filters, (1, 1), padding='same', kernel_initializer='he_normal')(layer_out)
+    # layer_out = tf.keras.layers.BatchNormalization()(layer_out)
     layer_out = tf.keras.layers.Activation('relu')(layer_out)
     return layer_out
 
@@ -139,11 +139,11 @@ def get_model(latent_dim=8, sr=44100, duration=1.0, spectrogram_shape=(80, 1025)
     x = layers.AveragePooling2D()(x)
     x = residual_module(x, 16)
     x = layers.AveragePooling2D()(x)
-    x = residual_module(x, 32)
+    x = residual_module(x, 16)
     x = layers.AveragePooling2D()(x)
-    x = residual_module(x, 32)
+    x = residual_module(x, 16)
     x = layers.AveragePooling2D()(x)
-    x = residual_module(x, 64)
+    x = residual_module(x, 16)
     x = layers.Flatten()(x)
     z_mean = layers.Dense(latent_dim, name="z_mean", activation=None)(x)
     z_log_var = layers.Dense(latent_dim, name="z_log_var", activation=None)(x)
@@ -151,13 +151,13 @@ def get_model(latent_dim=8, sr=44100, duration=1.0, spectrogram_shape=(80, 1025)
     encoder = keras.Model(img_inputs, [z_mean, z_log_var, z], name="encoder")
 
     latent_inputs = keras.Input(shape=(latent_dim,))
-    x = layers.Dense(5 * 64 * 64, activation='relu')(latent_inputs)
-    x = layers.Reshape((5, 64, 64))(x)
-    x = residual_transpose_module(x, 64)
+    x = layers.Dense(5 * 64 * 16, activation='relu')(latent_inputs)
+    x = layers.Reshape((5, 64, 16))(x)
+    x = residual_transpose_module(x, 16)
     x = layers.UpSampling2D(interpolation="nearest")(x)
-    x = residual_transpose_module(x, 32)
+    x = residual_transpose_module(x, 16)
     x = layers.UpSampling2D(interpolation="nearest")(x)
-    x = residual_transpose_module(x, 32)
+    x = residual_transpose_module(x, 16)
     x = layers.UpSampling2D(interpolation="nearest")(x)
     x = residual_transpose_module(x, 16)
     x = layers.UpSampling2D(interpolation="nearest")(x)
