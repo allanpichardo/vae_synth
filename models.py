@@ -80,9 +80,9 @@ def residual_module(layer_in, n_filters):
     # conv1
     conv1 = tf.keras.layers.Conv2D(n_filters, (5, 5), padding='same', activation='relu', kernel_initializer='he_normal')(layer_in)
     # conv2
-    conv2 = tf.keras.layers.Conv2D(n_filters, (3, 3), padding='same', activation='linear', kernel_initializer='he_normal')(conv1)
+    conv2 = tf.keras.layers.Conv2D(n_filters, (5, 5), padding='same', activation='relu', kernel_initializer='he_normal')(conv1)
     # conv3
-    conv3 = tf.keras.layers.Conv2D(n_filters, (3, 3), padding='same', activation='linear',
+    conv3 = tf.keras.layers.Conv2D(n_filters, (5, 5), padding='same', activation='linear',
                                    kernel_initializer='he_normal')(conv2)
     # add filters, assumes filters/channels last
     layer_out = tf.keras.layers.Add()([conv3, merge_input])
@@ -101,9 +101,9 @@ def residual_transpose_module(layer_in, n_filters):
         merge_input = tf.keras.layers.Conv2DTranspose(n_filters, (1, 1), padding='same', activation='relu', kernel_initializer='he_normal')(
             layer_in)
     # conv1
-    conv1 = tf.keras.layers.Conv2DTranspose(n_filters, (3, 3), padding='same', activation='relu', kernel_initializer='he_normal')(layer_in)
+    conv1 = tf.keras.layers.Conv2DTranspose(n_filters, (5, 5), padding='same', activation='relu', kernel_initializer='he_normal')(layer_in)
     # conv2
-    conv2 = tf.keras.layers.Conv2DTranspose(n_filters, (3, 3), padding='same', activation='linear', kernel_initializer='he_normal')(conv1)
+    conv2 = tf.keras.layers.Conv2DTranspose(n_filters, (5, 5), padding='same', activation='relu', kernel_initializer='he_normal')(conv1)
     # conv3
     conv3 = tf.keras.layers.Conv2DTranspose(n_filters, (5, 5), padding='same', activation='linear',
                                             kernel_initializer='he_normal')(conv2)
@@ -172,6 +172,6 @@ def get_model(latent_dim=8, sr=44100, duration=1.0, spectrogram_shape=(80, 1025)
 
 
 if __name__ == '__main__':
-    vae = get_model(latent_dim=10)
+    vae = get_model(latent_dim=8)
     vae.encoder.summary()
     vae.decoder.summary()
