@@ -80,12 +80,12 @@ def residual_module(layer_in, n_filters):
     # conv1
     conv1 = tf.keras.layers.Conv2D(n_filters, (3, 3), padding='same', activation='relu', kernel_initializer='he_normal')(layer_in)
     # conv2
-    conv2 = tf.keras.layers.Conv2D(n_filters, (3, 3), padding='same', activation='linear', kernel_initializer='he_normal')(conv1)
+    conv2 = tf.keras.layers.Conv2D(n_filters, (3, 3), padding='same', activation='relu', kernel_initializer='he_normal')(conv1)
     # conv3
     conv3 = tf.keras.layers.Conv2D(n_filters, (3, 3), padding='same', activation='linear',
                                    kernel_initializer='he_normal')(conv2)
     # add filters, assumes filters/channels last
-    layer_out = tf.keras.layers.Add()([conv3, conv2, merge_input])
+    layer_out = tf.keras.layers.Add()([conv3, merge_input])
     # activation function
     layer_out = tf.keras.layers.Conv2D(n_filters, (1, 1), padding='same', kernel_initializer='he_normal')(
         layer_out)
@@ -103,12 +103,12 @@ def residual_transpose_module(layer_in, n_filters):
     # conv1
     conv1 = tf.keras.layers.Conv2DTranspose(n_filters, (3, 3), padding='same', activation='relu', kernel_initializer='he_normal')(layer_in)
     # conv2
-    conv2 = tf.keras.layers.Conv2DTranspose(n_filters, (3, 3), padding='same', activation='linear', kernel_initializer='he_normal')(conv1)
+    conv2 = tf.keras.layers.Conv2DTranspose(n_filters, (3, 3), padding='same', activation='relu', kernel_initializer='he_normal')(conv1)
     # conv3
     conv3 = tf.keras.layers.Conv2DTranspose(n_filters, (3, 3), padding='same', activation='linear',
                                             kernel_initializer='he_normal')(conv2)
     # add filters, assumes filters/channels last
-    layer_out = tf.keras.layers.Add()([conv3, conv2, merge_input])
+    layer_out = tf.keras.layers.Add()([conv3, merge_input])
     # activation function
     layer_out = tf.keras.layers.Conv2DTranspose(n_filters, (1, 1), padding='same', kernel_initializer='he_normal')(layer_out)
     layer_out = tf.keras.layers.BatchNormalization()(layer_out)
