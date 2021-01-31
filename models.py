@@ -87,6 +87,8 @@ def residual_module(layer_in, n_filters):
     # add filters, assumes filters/channels last
     layer_out = tf.keras.layers.Add()([conv3, conv2, merge_input])
     # activation function
+    layer_out = tf.keras.layers.Conv2D(n_filters, (1, 1), padding='same', kernel_initializer='he_normal')(
+        layer_out)
     layer_out = tf.keras.layers.BatchNormalization()(layer_out)
     layer_out = tf.keras.layers.Activation('relu')(layer_out)
     return layer_out
@@ -108,6 +110,7 @@ def residual_transpose_module(layer_in, n_filters):
     # add filters, assumes filters/channels last
     layer_out = tf.keras.layers.Add()([conv3, conv2, merge_input])
     # activation function
+    layer_out = tf.keras.layers.Conv2DTranspose(n_filters, (1, 1), padding='same', kernel_initializer='he_normal')(layer_out)
     layer_out = tf.keras.layers.BatchNormalization()(layer_out)
     layer_out = tf.keras.layers.Activation('relu')(layer_out)
     return layer_out
