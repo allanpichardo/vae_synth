@@ -119,8 +119,9 @@ def get_model(latent_dim=8, sr=44100, duration=1.0, spectrogram_shape=(80, 1025)
     encoder_inputs = keras.Input(shape=input_shape)
     x = kapre.composed.get_stft_mag_phase(input_shape, n_fft=n_fft, return_decibel=False)(encoder_inputs)
     x = layers.experimental.preprocessing.Normalization(name='normalizer')(x)
-    stft_out = layers.Lambda(lambda m: tf.image.resize_with_crop_or_pad(m, spectrogram_shape[0], spectrogram_shape[1]))(
+    x = layers.Lambda(lambda m: tf.image.resize_with_crop_or_pad(m, spectrogram_shape[0], spectrogram_shape[1]))(
         x)
+    stft_out = layers.experimental.preprocessing.RandomFlip(mode='horizontal')(x)
     stft_model = keras.Model(encoder_inputs, stft_out, name='stft')
 
     img_inputs = keras.Input(shape=(spectrogram_shape[0], spectrogram_shape[1], 2))

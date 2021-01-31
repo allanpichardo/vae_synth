@@ -17,10 +17,10 @@ if __name__ == '__main__':
     path = os.path.join(os.path.dirname(__file__), 'samples')
     sr = 44100
     duration = 1.0
-    batch_size = 4
+    batch_size = 16
     latent_dim = 8
     spectrogram_shape = (80, 1025)
-    epochs = 100
+    epochs = 200
 
     sequence = SoundSequence(path, sr=sr, duration=duration, batch_size=batch_size)
 
