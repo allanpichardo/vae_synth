@@ -20,6 +20,7 @@ if __name__ == '__main__':
     batch_size = 4
     latent_dim = 8
     spectrogram_shape = (80, 1025)
+    epochs = 100
 
     sequence = SoundSequence(path, sr=sr, duration=duration, batch_size=batch_size)
 
@@ -37,8 +38,8 @@ if __name__ == '__main__':
     autoencoder.encoder.summary()
     autoencoder.decoder.summary()
 
-    autoencoder.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.00005))
-    autoencoder.fit(sequence, epochs=100, callbacks=[
+    autoencoder.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001))
+    autoencoder.fit(sequence, epochs=epochs, callbacks=[
         SpectrogramCallback(sequence, sr=sr, logdir=logdir),
         tf.keras.callbacks.TensorBoard(log_dir=logdir, embeddings_freq=1)
     ])
