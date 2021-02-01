@@ -16,7 +16,7 @@ if __name__ == '__main__':
     path = os.path.join(os.path.dirname(__file__), 'samples')
     sr = 44100
     duration = 1.0
-    batch_size = 8
+    batch_size = 4
     latent_dim = 8
     epochs = 200
 
