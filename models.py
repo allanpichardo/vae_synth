@@ -17,6 +17,56 @@ class Sampling(layers.Layer):
         return z_mean + tf.exp(0.5 * z_log_var) * epsilon
 
 
+class SampleVAE(keras.Model):
+
+    def call(self, inputs, training=None, mask=None):
+        u, v, z = self.encoder(inputs)
+        return self.decoder(z)
+
+    def __init__(self, encoder, decoder, **kwargs):
+        super(SampleVAE, self).__init__(**kwargs)
+        self.encoder = encoder
+        self.decoder = decoder
+        self.total_loss_tracker = keras.metrics.Mean(name="total_loss")
+        self.reconstruction_loss_tracker = keras.metrics.Mean(
+            name="reconstruction_loss"
+        )
+        self.kl_loss_tracker = keras.metrics.Mean(name="kl_loss")
+
+    @property
+    def metrics(self):
+        return [
+            self.total_loss_tracker,
+            self.reconstruction_loss_tracker,
+            self.kl_loss_tracker,
+        ]
+
+    def train_step(self, data):
+        if isinstance(data, tuple):
+            data = data[0]
+        with tf.GradientTape() as tape:
+            z_mean, z_log_var, z = self.encoder(data)
+            reconstruction = self.decoder(z)
+
+            reconstruction_loss = tf.keras.losses.MeanSquaredError()(data, reconstruction)
+
+            coefficient = 0.0001
+            kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
+            kl_loss = tf.reduce_mean(tf.reduce_sum(kl_loss, axis=1)) * coefficient
+            total_loss = reconstruction_loss + kl_loss
+
+        grads = tape.gradient(total_loss, self.trainable_weights)
+        self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
+        self.total_loss_tracker.update_state(total_loss)
+        self.reconstruction_loss_tracker.update_state(reconstruction_loss)
+        self.kl_loss_tracker.update_state(kl_loss)
+        return {
+            "loss": self.total_loss_tracker.result(),
+            "reconstruction_loss": self.reconstruction_loss_tracker.result(),
+            "kl_loss": self.kl_loss_tracker.result(),
+        }
+
+
 class VAE(keras.Model):
 
     def call(self, inputs, training=None, mask=None):
@@ -75,12 +125,15 @@ def residual_module(layer_in, n_filters):
     merge_input = layer_in
     # check if the number of filters needs to be increase, assumes channels last format
     if layer_in.shape[-1] != n_filters:
-        merge_input = tf.keras.layers.Conv2D(n_filters, (1, 1), padding='same', activation='relu', kernel_initializer='he_normal')(
+        merge_input = tf.keras.layers.Conv2D(n_filters, (1, 1), padding='same', activation='relu',
+                                             kernel_initializer='he_normal')(
             layer_in)
     # conv1
-    conv1 = tf.keras.layers.Conv2D(n_filters, (5, 5), padding='same', activation='relu', kernel_initializer='he_normal')(layer_in)
+    conv1 = tf.keras.layers.Conv2D(n_filters, (5, 5), padding='same', activation='relu',
+                                   kernel_initializer='he_normal')(layer_in)
     # conv2
-    conv2 = tf.keras.layers.Conv2D(n_filters, (5, 5), padding='same', activation='linear', kernel_initializer='he_normal')(conv1)
+    conv2 = tf.keras.layers.Conv2D(n_filters, (5, 5), padding='same', activation='linear',
+                                   kernel_initializer='he_normal')(conv1)
     # conv3
     # conv3 = tf.keras.layers.Conv2D(n_filters, (5, 5), padding='same', activation='linear',
     #                                kernel_initializer='he_normal')(conv2)
@@ -98,12 +151,15 @@ def residual_transpose_module(layer_in, n_filters):
     merge_input = layer_in
     # check if the number of filters needs to be increase, assumes channels last format
     if layer_in.shape[-1] != n_filters:
-        merge_input = tf.keras.layers.Conv2DTranspose(n_filters, (1, 1), padding='same', activation='relu', kernel_initializer='he_normal')(
+        merge_input = tf.keras.layers.Conv2DTranspose(n_filters, (1, 1), padding='same', activation='relu',
+                                                      kernel_initializer='he_normal')(
             layer_in)
     # conv1
-    conv1 = tf.keras.layers.Conv2DTranspose(n_filters, (5, 5), padding='same', activation='relu', kernel_initializer='he_normal')(layer_in)
+    conv1 = tf.keras.layers.Conv2DTranspose(n_filters, (5, 5), padding='same', activation='relu',
+                                            kernel_initializer='he_normal')(layer_in)
     # conv2
-    conv2 = tf.keras.layers.Conv2DTranspose(n_filters, (5, 5), padding='same', activation='linear', kernel_initializer='he_normal')(conv1)
+    conv2 = tf.keras.layers.Conv2DTranspose(n_filters, (5, 5), padding='same', activation='linear',
+                                            kernel_initializer='he_normal')(conv1)
     # conv3
     # conv3 = tf.keras.layers.Conv2DTranspose(n_filters, (5, 5), padding='same', activation='linear',
     #                                         kernel_initializer='he_normal')(conv2)
@@ -116,6 +172,22 @@ def residual_transpose_module(layer_in, n_filters):
     return layer_out
 
 
+def conv_1d_block(filters, inputs):
+    x = tf.keras.layers.Conv1D(filters, 3, padding='same')(inputs)
+    x = tf.keras.layers.BatchNormalization()(x)
+    x = tf.keras.layers.Activation('relu')(x)
+    x = tf.keras.layers.AveragePooling1D()(x)
+    return x
+
+
+def conv_1d_transpose_block(filters, inputs):
+    x = tf.keras.layers.Conv1DTranspose(filters, 3, padding='same')(inputs)
+    x = tf.keras.layers.BatchNormalization()(x)
+    x = tf.keras.layers.Activation('relu')(x)
+    x = tf.keras.layers.UpSampling1D()(x)
+    return x
+
+
 def get_synth_model(decoder, input_shape=(8,), n_fft=2048):
     inputs = keras.Input(shape=input_shape)
     x = decoder(inputs)
@@ -123,6 +195,45 @@ def get_synth_model(decoder, input_shape=(8,), n_fft=2048):
     x = kapre.InverseSTFT(n_fft=n_fft)(x)
     x = layers.Lambda(lambda h: tf.cast(h, tf.float32))(x)
     return keras.Model(inputs, x, name="synth")
+
+
+def get_sample_synth_model(decoder, input_shape=(8,)):
+    inputs = keras.Input(shape=input_shape)
+    x = decoder(inputs)
+    x = layers.Lambda(lambda h: tf.cast(h, tf.float32))(x)
+    return keras.Model(inputs, x, name="synth")
+
+
+def get_sample_model(latent_dim=8, sr=44100, duration=1.0):
+    input_shape = (int(sr * duration), 1)
+
+    encoder_inputs = tf.keras.layers.Input(shape=input_shape)
+    x = conv_1d_block(32, encoder_inputs)
+    x = conv_1d_block(32, x)
+    x = conv_1d_block(64, x)
+    x = conv_1d_block(64, x)
+    x = conv_1d_block(128, x)
+    x = conv_1d_block(128, x)
+    x = tf.keras.layers.Flatten()(x)
+    z_mean = layers.Dense(latent_dim, name="z_mean", activation=None)(x)
+    z_log_var = layers.Dense(latent_dim, name="z_log_var", activation=None)(x)
+    z = Sampling()([z_mean, z_log_var])
+    encoder = keras.Model(encoder_inputs, [z_mean, z_log_var, z], name="encoder")
+
+    latent_inputs = tf.keras.Input(shape=(latent_dim,))
+    x = tf.keras.layers.Dense(689 * 128)(latent_inputs)
+    x = tf.keras.layers.Reshape((689, 128))(x)
+    x = conv_1d_transpose_block(128, x)
+    x = conv_1d_transpose_block(128, x)
+    x = conv_1d_transpose_block(64, x)
+    x = conv_1d_transpose_block(64, x)
+    x = tf.keras.layers.ZeroPadding1D((0, 1))(x)
+    x = conv_1d_transpose_block(32, x)
+    x = conv_1d_transpose_block(32, x)
+    decoder_outputs = tf.keras.layers.Conv1DTranspose(1, 3, padding='same', activation=None)(x)
+    decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
+
+    return SampleVAE(encoder, decoder)
 
 
 def get_model(latent_dim=8, sr=44100, duration=1.0, spectrogram_shape=(80, 1025), n_fft=2048):
@@ -172,6 +283,6 @@ def get_model(latent_dim=8, sr=44100, duration=1.0, spectrogram_shape=(80, 1025)
 
 
 if __name__ == '__main__':
-    vae = get_model(latent_dim=8)
-    vae.encoder.summary()
-    vae.decoder.summary()
+    m = get_sample_model()
+    m.build((32, 44100, 1))
+    m.summary()
