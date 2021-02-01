@@ -20,6 +20,8 @@ if __name__ == '__main__':
     latent_dim = 8
     epochs = 200
 
+    tf.keras.backend.set_floatx('float16')
+
     sequence = SoundSequence(path, sr=sr, duration=duration, batch_size=batch_size)
 
     autoencoder = None
