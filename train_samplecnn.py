@@ -23,7 +23,7 @@ if __name__ == '__main__':
     sequence = SoundSequence(path, sr=sr, duration=duration, batch_size=batch_size)
 
     autoencoder = None
-    if os.path.exists(stft_model_path) and os.path.exists(enc_model_path) and os.path.exists(dec_model_path):
+    if os.path.exists(enc_model_path) and os.path.exists(dec_model_path):
         autoencoder = SampleVAE(
             tf.keras.models.load_model(enc_model_path, compile=False),
             tf.keras.models.load_model(dec_model_path, compile=False)
