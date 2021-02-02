@@ -2,6 +2,7 @@ import kapre
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
+import tensorflow.keras.backend as K
 
 from utils import mag_phase_to_complex
 
@@ -23,10 +24,11 @@ class SampleVAE(keras.Model):
         u, v, z = self.encoder(inputs)
         return self.decoder(z)
 
-    def __init__(self, encoder, decoder, **kwargs):
+    def __init__(self, encoder, decoder, input_shape=(44100, 1), **kwargs):
         super(SampleVAE, self).__init__(**kwargs)
         self.encoder = encoder
         self.decoder = decoder
+        self.stft = kapre.composed.get_stft_magnitude_layer(input_shape=input_shape, return_decibel=True)
         self.total_loss_tracker = keras.metrics.Mean(name="total_loss")
         self.reconstruction_loss_tracker = keras.metrics.Mean(
             name="reconstruction_loss"
@@ -41,6 +43,9 @@ class SampleVAE(keras.Model):
             self.kl_loss_tracker,
         ]
 
+    def root_mean_squared_error(self, y_true, y_pred):
+        return tf.sqrt(tf.reduce_mean(tf.square(y_pred - y_true)))
+
     def train_step(self, data):
         if isinstance(data, tuple):
             data = data[0]
@@ -48,7 +53,11 @@ class SampleVAE(keras.Model):
             z_mean, z_log_var, z = self.encoder(data)
             reconstruction = self.decoder(z)
 
-            reconstruction_loss = tf.keras.losses.MeanSquaredError()(data, reconstruction)
+            spec_x = self.stft(data)
+            spec_y = self.stft(reconstruction)
+
+            # reconstruction_loss = self.root_mean_squared_error(spec_x, spec_y)
+            reconstruction_loss = tf.keras.losses.MeanAbsoluteError()(spec_x, spec_y)
 
             coefficient = 0.0001
             kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
@@ -285,4 +294,8 @@ def get_model(latent_dim=8, sr=44100, duration=1.0, spectrogram_shape=(80, 1025)
 if __name__ == '__main__':
     m = get_sample_model()
     m.build((32, 44100, 1))
-    m.summary()
+    test = m.decoder(tf.expand_dims(tf.convert_to_tensor([0,0,0,0,0,0,0,0]), 0))
+    blah = m.encoder(test)
+    print(test)
+    foo = m.predict(test)
+    print(foo)

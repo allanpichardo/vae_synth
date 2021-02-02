@@ -7,7 +7,7 @@ import tensorflow as tf
 
 class SoundSequence(tf.keras.utils.Sequence):
 
-    def __init__(self, music_path, sr=44100, duration=2.0, batch_size=32, shuffle=True, as_spectrogram=True):
+    def __init__(self, music_path, sr=44100, duration=2.0, batch_size=32, shuffle=True):
         """
         Create a data generator that reads wav files from a directory
         :param music_path:
@@ -19,7 +19,6 @@ class SoundSequence(tf.keras.utils.Sequence):
         self.duration = duration
         self.batch_size = batch_size
         self.shuffle = shuffle
-        self.as_spectrogram = as_spectrogram
 
         self.wav_paths = glob(os.path.join(music_path, '*', '*'))
         self.labels = []
@@ -40,8 +39,9 @@ class SoundSequence(tf.keras.utils.Sequence):
 
         for i, (path, label) in enumerate(zip(wav_paths, labels)):
             wav, rate = librosa.load(path, sr=self.sr, duration=self.duration, res_type='kaiser_fast')
+            wav = librosa.util.normalize(wav)
             wav = tf.convert_to_tensor(wav)
-            wav = tf.cast(wav, tf.float16)
+            # wav = tf.cast(wav, tf.float16)
             wav = tf.expand_dims(wav, 1)
             wav = self.pad_up_to(wav, [rate * int(self.duration), 1], 0)
             X.append(wav)
@@ -64,3 +64,12 @@ class SoundSequence(tf.keras.utils.Sequence):
         self.indexes = np.arange(len(self.wav_paths))
         if self.shuffle:
             np.random.shuffle(self.indexes)
+
+
+if __name__ == '__main__':
+    seq = SoundSequence('/Users/allanpichardo/PycharmProjects/audio-generation-autoencoder/samples', duration=1.0)
+
+    for x, y in seq:
+        for wav in x:
+            print(tf.reduce_min(wav))
+            print(tf.reduce_max(wav))

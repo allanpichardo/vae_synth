@@ -63,6 +63,9 @@ class WaveformCallback(tf.keras.callbacks.Callback):
         self.logdir = logdir
         self.sr = sr
 
+    def normalize(self, x):
+        return (x - tf.reduce_min(x)) / (tf.reduce_max(x) - tf.reduce_min(x))
+
     def on_epoch_end(self, epoch, logs=None):
         x, y = self.soundequence.__getitem__(0)
 
