@@ -296,7 +296,7 @@ def get_model(latent_dim=8, sr=44100, duration=1.0, spectrogram_shape=(80, 1025)
     x = kapre.composed.get_stft_mag_phase(input_shape, n_fft=n_fft, return_decibel=False)(encoder_inputs)
     x = layers.Lambda(lambda m: tf.image.resize_with_crop_or_pad(m, spectrogram_shape[0], spectrogram_shape[1]))(x)
 
-    x2 = kapre.composed.get_melspectrogram_layer(input_shape, n_fft=n_fft, sample_rate=sr, n_mels=spectrogram_shape[1], return_decibel=True)(encoder_inputs)
+    x2 = kapre.composed.get_stft_magnitude_layer(input_shape, n_fft=n_fft, return_decibel=True)(encoder_inputs)
     x2 = layers.Lambda(lambda m: tf.image.resize_with_crop_or_pad(m, spectrogram_shape[0], spectrogram_shape[1]))(x2)
 
     x = tf.keras.layers.Concatenate()([x, x2])
