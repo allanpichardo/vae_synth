@@ -28,7 +28,7 @@ class SpectrogramCallback(tf.keras.callbacks.Callback):
                                           self.model.stft.get_layer('normalizer').variance))
 
     def normalize(self, x):
-        return (x - tf.reduce_min(x)) / (tf.reduce_max(x) - tf.reduce_min(x))
+        return (x - tf.reduce_min(x, axis=[0, 1, 2])) / (tf.reduce_max(x, axis=[0, 1, 2]) - tf.reduce_min(x, axis=[0, 1, 2]))
 
     def on_epoch_end(self, epoch, logs=None):
         x, y = self.soundequence.__getitem__(0)

@@ -110,6 +110,9 @@ class VAE(keras.Model):
             self.kl_loss_tracker,
         ]
 
+    def root_mean_squared_error(self, y_true, y_pred):
+        return tf.sqrt(tf.reduce_mean(tf.square(y_pred - y_true)))
+
     def train_step(self, data):
         if isinstance(data, tuple):
             data = data[0]
@@ -118,7 +121,7 @@ class VAE(keras.Model):
             z_mean, z_log_var, z = self.encoder(stft_out)
             reconstruction = self.decoder(z)
 
-            reconstruction_loss = tf.keras.losses.MeanAbsoluteError()(stft_out, reconstruction)
+            reconstruction_loss = self.root_mean_squared_error(stft_out, reconstruction)
 
             coefficient = 0.0001
             kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
@@ -304,13 +307,18 @@ def get_model(latent_dim=8, sr=44100, duration=1.0, spectrogram_shape=(80, 1025)
 
     img_inputs = keras.Input(shape=(spectrogram_shape[0], spectrogram_shape[1], 3))
     x = residual_module(img_inputs, 16)
-    x = layers.AveragePooling2D()(x)
     x = residual_module(x, 16)
     x = layers.AveragePooling2D()(x)
     x = residual_module(x, 16)
-    x = layers.AveragePooling2D()(x)
     x = residual_module(x, 16)
     x = layers.AveragePooling2D()(x)
+    x = residual_module(x, 16)
+    x = residual_module(x, 16)
+    x = layers.AveragePooling2D()(x)
+    x = residual_module(x, 16)
+    x = residual_module(x, 16)
+    x = layers.AveragePooling2D()(x)
+    x = residual_module(x, 16)
     x = residual_module(x, 16)
     x = layers.Flatten()(x)
     z_mean = layers.Dense(latent_dim, name="z_mean", activation=None)(x)
@@ -322,14 +330,19 @@ def get_model(latent_dim=8, sr=44100, duration=1.0, spectrogram_shape=(80, 1025)
     x = layers.Dense(5 * 64 * 16, activation='relu')(latent_inputs)
     x = layers.Reshape((5, 64, 16))(x)
     x = residual_transpose_module(x, 16)
-    x = layers.UpSampling2D(interpolation="nearest")(x)
     x = residual_transpose_module(x, 16)
     x = layers.UpSampling2D(interpolation="nearest")(x)
     x = residual_transpose_module(x, 16)
+    x = residual_transpose_module(x, 16)
     x = layers.UpSampling2D(interpolation="nearest")(x)
+    x = residual_transpose_module(x, 16)
+    x = residual_transpose_module(x, 16)
+    x = layers.UpSampling2D(interpolation="nearest")(x)
+    x = residual_transpose_module(x, 16)
     x = residual_transpose_module(x, 16)
     x = layers.UpSampling2D(interpolation="nearest")(x)
     x = layers.ZeroPadding2D(padding=[(0, 0), (0, 1)])(x)
+    x = residual_transpose_module(x, 16)
     x = residual_transpose_module(x, 16)
     decoder_outputs = layers.Conv2DTranspose(3, 3, activation=None, padding="same")(x)
     decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
