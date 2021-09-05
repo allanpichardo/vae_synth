@@ -69,7 +69,7 @@ class WaveformCallback(tf.keras.callbacks.Callback):
     def on_epoch_end(self, epoch, logs=None):
         x, y = self.soundequence.__getitem__(0)
 
-        audio_y = self.model.decoder(x)
+        audio_y = self.model(x)
         file_writer = tf.summary.create_file_writer(self.logdir)
 
         with file_writer.as_default():
