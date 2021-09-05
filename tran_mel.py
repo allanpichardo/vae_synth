@@ -31,7 +31,7 @@ if __name__ == '__main__':
     autoencoder.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001), loss='mae')
     autoencoder.fit(sequence, epochs=epochs, callbacks=[
         WaveformCallback(sequence, sr=sr, logdir=logdir),
-        tf.keras.callbacks.TensorBoard(log_dir=logdir, embeddings_freq=1)
+        tf.keras.callbacks.TensorBoard(log_dir=logdir)
     ])
 
     if not os.path.exists(os.path.join(os.path.dirname(__file__), 'models')):
