@@ -258,26 +258,33 @@ def get_sample_synth_model(decoder, input_shape=(8,)):
     return keras.Model(inputs, x, name="synth")
 
 
-def get_mfcc_autoencoder(sr=44100, duration=1.0):
+def get_stft_autoencoder(sr=44100, duration=1.0):
     waveform_input_shape = (int(sr * duration), 1)
 
     inputs = tf.keras.Input(shape=waveform_input_shape)
-    mel = kapre.composed.get_melspectrogram_layer(input_shape=waveform_input_shape, return_decibel=True,
-                                                input_data_format='channels_last',
-                                                output_data_format='channels_last', name='mel_spectrogram')(inputs)
-    mel_encoder = tf.keras.Model(inputs=inputs, outputs=mel, name='mel_encoder')
+    stft = kapre.composed.get_stft_mag_phase(input_shape=waveform_input_shape, return_decibel=True)(inputs)
+    # mel = kapre.composed.get_melspectrogram_layer(input_shape=waveform_input_shape, return_decibel=True,
+    #                                             input_data_format='channels_last',
+    #                                             output_data_format='channels_last', name='mel_spectrogram')(inputs)
+    stft_encoder = tf.keras.Model(inputs=inputs, outputs=stft, name='stft_encoder')
 
-    mel_inputs = tf.keras.Input(shape=(83, 128, 1))
-    x = tf.keras.layers.Reshape((83, 128))(mel_inputs)
-    x = tf.keras.layers.LSTM(128, return_sequences=True)(x)
-    x = tf.keras.layers.LSTM(256, return_sequences=False)(x)
+    stft_inputs = tf.keras.Input(shape=(83, 1025, 2))
+    m, p = tf.split(stft_inputs, 2, -1)
+
+    m = tf.keras.layers.Reshape((83, 1025))(m)
+    m = tf.keras.layers.LSTM(128, return_sequences=False)(m)
+
+    p = tf.keras.layers.Reshape((83, 1025))(p)
+    p = tf.keras.layers.LSTM(128, return_sequences=False)(p)
+
+    x = tf.keras.layers.Concatenate()([m, p])
     x = tf.keras.layers.Dense(waveform_input_shape[0], activation='tanh')(x)
     x = tf.keras.layers.Reshape(waveform_input_shape)(x)
-    mel_decoder = tf.keras.Model(inputs=mel_inputs, outputs=x, name='mel_decoder')
+    stft_decoder = tf.keras.Model(inputs=stft_inputs, outputs=x, name='stft_decoder')
 
-    mel_autoencoder = tf.keras.Model(inputs=inputs, outputs=mel_decoder(mel_encoder(inputs)), name='mel_autoencoder')
+    stft_autoencoder = tf.keras.Model(inputs=inputs, outputs=stft_decoder(stft_encoder(inputs)), name='stft_autoencoder')
 
-    return mel_autoencoder
+    return stft_autoencoder
 
 
 def get_sample_model(latent_dim=8, sr=44100, duration=1.0):
@@ -385,7 +392,7 @@ def get_model(latent_dim=8, sr=44100, duration=1.0, spectrogram_shape=(80, 1025)
 
 
 if __name__ == '__main__':
-    m = get_mfcc_autoencoder()
+    m = get_stft_autoencoder()
     m.build((32, 44100, 1))
     m.summary()
     # test = m.decoder(tf.expand_dims(tf.convert_to_tensor([0, 0, 0, 0, 0, 0, 0, 0]), 0))

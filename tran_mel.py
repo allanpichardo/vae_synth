@@ -5,12 +5,12 @@ import librosa
 
 from generators import SoundSequence
 from callbacks import WaveformCallback
-from models import get_mfcc_autoencoder
+from models import get_stft_autoencoder
 
 if __name__ == '__main__':
     logdir = os.path.join(os.path.dirname(__file__), 'logs', datetime.now().strftime("%Y%m%d-%H%M%S"))
 
-    mel_autonencoder_path = os.path.join(os.path.dirname(__file__), 'models', 'mel_autoenc_mod_v{}'.format(1))
+    stft_autoencoder_path = os.path.join(os.path.dirname(__file__), 'models', 'stft_autoenc_mod_v{}'.format(1))
 
     path = os.path.join(os.path.dirname(__file__), 'samples')
     sr = 44100
@@ -21,10 +21,10 @@ if __name__ == '__main__':
     sequence = SoundSequence(path, sr=sr, duration=duration, batch_size=batch_size, as_autoencoder=True)
 
     autoencoder = None
-    if os.path.exists(mel_autonencoder_path):
-        autoencoder = tf.keras.models.load_model(mel_autonencoder_path, compile=False),
+    if os.path.exists(stft_autoencoder_path):
+        autoencoder = tf.keras.models.load_model(stft_autoencoder_path, compile=False),
     else:
-        autoencoder = get_mfcc_autoencoder(sr, duration)
+        autoencoder = get_stft_autoencoder(sr, duration)
 
     autoencoder.summary()
 
@@ -37,7 +37,7 @@ if __name__ == '__main__':
     if not os.path.exists(os.path.join(os.path.dirname(__file__), 'models')):
         os.makedirs(os.path.join(os.path.dirname(__file__), 'models'), exist_ok=True)
 
-    autoencoder.save(mel_autonencoder_path, save_format='tf', include_optimizer=False)
+    autoencoder.save(stft_autoencoder_path, save_format='tf', include_optimizer=False)
 
     # synth = get_synth_model(autoencoder.decoder, input_shape=(latent_dim,))
     # synth.summary()
