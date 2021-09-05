@@ -269,8 +269,9 @@ def get_mfcc_autoencoder(sr=44100, duration=1.0):
 
     mel_inputs = tf.keras.Input(shape=(83, 128, 1))
     x = tf.keras.layers.Reshape((83, 128))(mel_inputs)
-    x = tf.keras.layers.LSTM(waveform_input_shape[0], return_sequences=False)(x)
-    # x = tf.keras.layers.Dense(waveform_input_shape[0], activation='tanh')(x)
+    x = tf.keras.layers.LSTM(128, return_sequences=True)(x)
+    x = tf.keras.layers.LSTM(256, return_sequences=False)(x)
+    x = tf.keras.layers.Dense(waveform_input_shape[0], activation='tanh')(x)
     x = tf.keras.layers.Reshape(waveform_input_shape)(x)
     mel_decoder = tf.keras.Model(inputs=mel_inputs, outputs=x, name='mel_decoder')
 
