@@ -272,7 +272,7 @@ def get_mfcc_autoencoder(sr=44100, duration=1.0):
     x = tf.keras.layers.Conv2D(128, 5, padding='same', activation='elu')(x)
     x = tf.keras.layers.Conv2D(256, 3, padding='same', activation='elu')(x)
     x = tf.keras.layers.GlobalAveragePooling2D()(x)
-    x = tf.keras.layers.Dense(waveform_input_shape[0])(x)
+    x = tf.keras.layers.Dense(waveform_input_shape[0], activation='tanh')(x)
     x = tf.keras.layers.Reshape(waveform_input_shape)(x)
     mel_decoder = tf.keras.Model(inputs=mel_inputs, outputs=x, name='mel_decoder')
 
