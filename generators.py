@@ -7,7 +7,7 @@ import tensorflow as tf
 
 class SoundSequence(tf.keras.utils.Sequence):
 
-    def __init__(self, music_path, sr=44100, duration=2.0, batch_size=32, shuffle=True):
+    def __init__(self, music_path, sr=44100, duration=2.0, batch_size=32, shuffle=True, as_autoencoder=False):
         """
         Create a data generator that reads wav files from a directory
         :param music_path:
@@ -19,6 +19,7 @@ class SoundSequence(tf.keras.utils.Sequence):
         self.duration = duration
         self.batch_size = batch_size
         self.shuffle = shuffle
+        self.as_autoencoder = as_autoencoder
 
         self.wav_paths = glob(os.path.join(music_path, '*', '*'))
         self.labels = []
@@ -50,7 +51,7 @@ class SoundSequence(tf.keras.utils.Sequence):
         X = tf.stack(X)
         Y = tf.stack(Y)
 
-        return X, Y
+        return (X, Y) if not self.as_autoencoder else (X, X)
 
     def __len__(self):
         return int(np.floor(len(self.wav_paths) / float(self.batch_size)))
