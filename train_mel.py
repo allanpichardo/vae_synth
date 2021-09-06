@@ -28,7 +28,7 @@ if __name__ == '__main__':
 
     autoencoder.summary()
 
-    autoencoder.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001), loss='mae')
+    autoencoder.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss='mae')
     autoencoder.fit(sequence, epochs=epochs, callbacks=[
         WaveformCallback(sequence, sr=sr, logdir=logdir),
         tf.keras.callbacks.TensorBoard(log_dir=logdir)

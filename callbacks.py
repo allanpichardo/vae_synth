@@ -74,7 +74,9 @@ class WaveformCallback(tf.keras.callbacks.Callback):
         plt.savefig(buf, format='png')
         buf.seek(0)
         img = tf.image.decode_png(buf.getvalue(), channels=4)
-        return tf.expand_dims(img, axis=0)
+        img = tf.expand_dims(img, axis=0)
+        plt.close()
+        return img
 
     def normalize(self, x):
         return (x - tf.reduce_min(x)) / (tf.reduce_max(x) - tf.reduce_min(x))
