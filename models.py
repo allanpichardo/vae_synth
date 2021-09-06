@@ -265,15 +265,15 @@ def get_stft_autoencoder(sr=22050, duration=1.0):
     stft = kapre.composed.get_stft_mag_phase(input_shape=waveform_input_shape, return_decibel=True)(inputs)
     stft_encoder = tf.keras.Model(inputs=inputs, outputs=stft, name='stft_encoder')
 
-    stft_inputs = tf.keras.Input(shape=(40, 1025, 2))
+    stft_inputs = tf.keras.Input(shape=(stft_encoder.output_shape[1], stft_encoder.output_shape[2], stft_encoder.output_shape[3]))
     m, p = tf.split(stft_inputs, 2, -1)
 
-    m = tf.keras.layers.Reshape((40, 1025))(m)
+    m = tf.squeeze(m, axis=-1)
     m = tf.keras.layers.LayerNormalization()(m)
     m = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(83, activation='tanh'))(m)
     m = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(128, return_sequences=False))(m)
 
-    p = tf.keras.layers.Reshape((40, 1025))(p)
+    p = tf.squeeze(p, axis=-1)
     p = tf.keras.layers.LayerNormalization()(p)
     p = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(83, activation='tanh'))(p)
     p = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(128, return_sequences=False))(p)
@@ -393,8 +393,8 @@ def get_model(latent_dim=8, sr=44100, duration=1.0, spectrogram_shape=(80, 1025)
 
 
 if __name__ == '__main__':
-    m = get_stft_autoencoder(sr=22050)
-    m.build((32, 22050, 1))
+    m = get_stft_autoencoder(sr=11025)
+    m.build((32, 11025, 1))
     m.summary()
     # test = m.decoder(tf.expand_dims(tf.convert_to_tensor([0, 0, 0, 0, 0, 0, 0, 0]), 0))
     # blah = m.encoder(test)

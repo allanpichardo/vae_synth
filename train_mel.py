@@ -13,7 +13,7 @@ if __name__ == '__main__':
     stft_autoencoder_path = os.path.join(os.path.dirname(__file__), 'models', 'stft_autoenc_mod_v{}'.format(1))
 
     path = os.path.join(os.path.dirname(__file__), 'samples')
-    sr = 22050
+    sr = 11025
     duration = 1.0
     batch_size = 16
     epochs = 200
