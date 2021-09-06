@@ -263,21 +263,27 @@ def get_stft_autoencoder(sr=44100, duration=1.0):
 
     inputs = tf.keras.Input(shape=waveform_input_shape)
     stft = kapre.composed.get_stft_mag_phase(input_shape=waveform_input_shape, return_decibel=True)(inputs)
-    # mel = kapre.composed.get_melspectrogram_layer(input_shape=waveform_input_shape, return_decibel=True,
-    #                                             input_data_format='channels_last',
-    #                                             output_data_format='channels_last', name='mel_spectrogram')(inputs)
+    stft = tf.keras.layers.BatchNormalization()(stft)
     stft_encoder = tf.keras.Model(inputs=inputs, outputs=stft, name='stft_encoder')
 
     stft_inputs = tf.keras.Input(shape=(83, 1025, 2))
-    m, p = tf.split(stft_inputs, 2, -1)
-
-    m = tf.keras.layers.Reshape((83, 1025))(m)
-    m = tf.keras.layers.LSTM(128, return_sequences=False)(m)
-
-    p = tf.keras.layers.Reshape((83, 1025))(p)
-    p = tf.keras.layers.LSTM(128, return_sequences=False)(p)
-
-    x = tf.keras.layers.Concatenate()([m, p])
+    x = tf.keras.layers.TimeDistributed(
+        tf.keras.layers.Conv1D(8, 4, activation='tanh')
+    )(stft_inputs)
+    x = tf.keras.layers.MaxPooling2D()(x)
+    x = tf.keras.layers.TimeDistributed(
+        tf.keras.layers.Conv1D(16, 4, activation='tanh')
+    )(x)
+    x = tf.keras.layers.MaxPooling2D()(x)
+    x = tf.keras.layers.TimeDistributed(
+        tf.keras.layers.Conv1D(32, 4, activation='tanh')
+    )(x)
+    x = tf.keras.layers.MaxPooling2D()(x)
+    x = tf.keras.layers.TimeDistributed(
+        tf.keras.layers.Conv1D(64, 4, activation='tanh')
+    )(x)
+    x = tf.keras.layers.MaxPooling2D()(x)
+    x = tf.keras.layers.GlobalMaxPool2D()(x)
     x = tf.keras.layers.Dense(waveform_input_shape[0], activation='tanh')(x)
     x = tf.keras.layers.Reshape(waveform_input_shape)(x)
     stft_decoder = tf.keras.Model(inputs=stft_inputs, outputs=x, name='stft_decoder')
