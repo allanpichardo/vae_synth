@@ -2,6 +2,8 @@ import kapre
 import tensorflow as tf
 from datetime import datetime
 import librosa
+import matplotlib.pyplot as plt
+import io
 
 from utils import mag_phase_to_complex
 
@@ -63,6 +65,17 @@ class WaveformCallback(tf.keras.callbacks.Callback):
         self.logdir = logdir
         self.sr = sr
 
+    def gen_plot(self, wave):
+        """Create a pyplot plot and save to buffer."""
+        w = tf.squeeze(wave, axis=-1)
+        plt.figure()
+        plt.plot(w[0].numpy())
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png')
+        buf.seek(0)
+        img = tf.image.decode_png(buf.getvalue(), channels=4)
+        return tf.expand_dims(img, axis=0)
+
     def normalize(self, x):
         return (x - tf.reduce_min(x)) / (tf.reduce_max(x) - tf.reduce_min(x))
 
@@ -73,8 +86,10 @@ class WaveformCallback(tf.keras.callbacks.Callback):
         file_writer = tf.summary.create_file_writer(self.logdir)
 
         with file_writer.as_default():
-            tf.summary.audio("Sample Input", tf.cast(x, tf.float32), self.sr, step=epoch, max_outputs=5,
+            tf.summary.audio("Sample Input", tf.cast(x, tf.float32), self.sr, step=epoch, max_outputs=2,
                              description="Audio sample input")
             tf.summary.audio("Sample Reconstruction", tf.cast(librosa.util.normalize(audio_y), tf.float32), self.sr,
-                             step=epoch, max_outputs=5,
+                             step=epoch, max_outputs=2,
                              description="Synthesized audio")
+            tf.summary.image("Waveform Input", self.gen_plot(x), step=epoch, max_outputs=1)
+            tf.summary.image("Waveform Reconstruction", self.gen_plot(audio_y), step=epoch, max_outputs=1)
