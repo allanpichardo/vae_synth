@@ -271,16 +271,15 @@ def get_stft_autoencoder(sr=44100, duration=1.0):
     m = tf.keras.layers.Reshape((83, 1025))(m)
     m = tf.keras.layers.LayerNormalization()(m)
     m = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(83, activation='tanh'))(m)
-    m = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(128, return_sequences=True))(m)
     m = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(128, return_sequences=False))(m)
 
     p = tf.keras.layers.Reshape((83, 1025))(p)
     p = tf.keras.layers.LayerNormalization()(p)
     p = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(83, activation='tanh'))(p)
-    p = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(128, return_sequences=True))(p)
     p = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(128, return_sequences=False))(p)
 
     x = tf.keras.layers.Concatenate()([m, p])
+    x = tf.keras.layers.Dense(waveform_input_shape[0] / 32, activation='tanh')(x)
     x = tf.keras.layers.Dense(waveform_input_shape[0], activation='linear')(x)
     x = tf.keras.layers.Reshape(waveform_input_shape)(x)
     stft_decoder = tf.keras.Model(inputs=stft_inputs, outputs=x, name='stft_decoder')
