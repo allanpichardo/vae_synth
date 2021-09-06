@@ -258,28 +258,27 @@ def get_sample_synth_model(decoder, input_shape=(8,)):
     return keras.Model(inputs, x, name="synth")
 
 
-def get_stft_autoencoder(sr=44100, duration=1.0):
+def get_stft_autoencoder(sr=22050, duration=1.0):
     waveform_input_shape = (int(sr * duration), 1)
 
     inputs = tf.keras.Input(shape=waveform_input_shape)
     stft = kapre.composed.get_stft_mag_phase(input_shape=waveform_input_shape, return_decibel=True)(inputs)
     stft_encoder = tf.keras.Model(inputs=inputs, outputs=stft, name='stft_encoder')
 
-    stft_inputs = tf.keras.Input(shape=(83, 1025, 2))
+    stft_inputs = tf.keras.Input(shape=(40, 1025, 2))
     m, p = tf.split(stft_inputs, 2, -1)
 
-    m = tf.keras.layers.Reshape((83, 1025))(m)
+    m = tf.keras.layers.Reshape((40, 1025))(m)
     m = tf.keras.layers.LayerNormalization()(m)
     m = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(83, activation='tanh'))(m)
     m = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(128, return_sequences=False))(m)
 
-    p = tf.keras.layers.Reshape((83, 1025))(p)
+    p = tf.keras.layers.Reshape((40, 1025))(p)
     p = tf.keras.layers.LayerNormalization()(p)
     p = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(83, activation='tanh'))(p)
     p = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(128, return_sequences=False))(p)
 
     x = tf.keras.layers.Concatenate()([m, p])
-    x = tf.keras.layers.Dense(waveform_input_shape[0] / 32, activation='tanh')(x)
     x = tf.keras.layers.Dense(waveform_input_shape[0], activation='linear')(x)
     x = tf.keras.layers.Reshape(waveform_input_shape)(x)
     stft_decoder = tf.keras.Model(inputs=stft_inputs, outputs=x, name='stft_decoder')
@@ -394,8 +393,8 @@ def get_model(latent_dim=8, sr=44100, duration=1.0, spectrogram_shape=(80, 1025)
 
 
 if __name__ == '__main__':
-    m = get_stft_autoencoder()
-    m.build((32, 44100, 1))
+    m = get_stft_autoencoder(sr=22050)
+    m.build((32, 22050, 1))
     m.summary()
     # test = m.decoder(tf.expand_dims(tf.convert_to_tensor([0, 0, 0, 0, 0, 0, 0, 0]), 0))
     # blah = m.encoder(test)
