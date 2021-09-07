@@ -258,40 +258,54 @@ def get_sample_synth_model(decoder, input_shape=(8,)):
     return keras.Model(inputs, x, name="synth")
 
 
+def conv_down_block(x, channels=32, activation=None, padding='same', waveform_input_shape=(44100, 1)):
+    x = tf.keras.layers.Conv1D(channels, 5, padding=padding, activation=activation)(x)
+    x = tf.keras.layers.AveragePooling1D()(x)
+    return x
+
+def conv_up_block(x, channels=32, activation=None, padding='same', waveform_input_shape=(44100, 1)):
+    x = tf.keras.layers.Conv1DTranspose(channels, 5, padding=padding, activation=activation)(x)
+    x = tf.keras.layers.UpSampling1D()(x)
+    return x
+
 def get_stft_autoencoder(sr=22050, duration=1.0):
     waveform_input_shape = (int(sr * duration), 1)
+    samples = waveform_input_shape[0]
+    adjustments = []
 
     inputs = tf.keras.Input(shape=waveform_input_shape)
-    stft = kapre.composed.get_stft_mag_phase(input_shape=waveform_input_shape, return_decibel=False)(inputs)
-    stft_encoder = tf.keras.Model(inputs=inputs, outputs=stft, name='stft_encoder')
+    x = tf.keras.layers.LayerNormalization()(inputs)
+    for i in range(10):
+        x = conv_down_block(x, 16, 'tanh')
+        samples = samples // 2
+        if samples % 2 != 0:
+            x = tf.keras.layers.Cropping1D((0, 1))(x)
+            samples -= 1
+            adjustments.append(samples)
 
-    stft_inputs = tf.keras.Input(shape=(stft_encoder.output_shape[1], stft_encoder.output_shape[2], stft_encoder.output_shape[3]))
-    m, p = tf.split(stft_inputs, 2, -1)
+    for i in range(10):
+        x = conv_up_block(x, 16, 'tanh')
+        if len(adjustments) > 0:
+            div = adjustments.pop()
+            if samples == div:
+                x = tf.keras.layers.ZeroPadding1D()(x)
+                samples += 1
+            else:
+                adjustments.append(div)
+        samples *= 2
 
-    m = tf.squeeze(m, axis=-1)
-    m = tf.keras.layers.LayerNormalization()(m)
-    m = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(64, activation='tanh'))(m)
-    m = tf.keras.layers.LSTM(128, return_sequences=True)(m)
-    m = tf.keras.layers.LSTM(64, return_sequences=True)(m)
-    m = tf.keras.layers.LSTM(32, return_sequences=True)(m)
-    m = tf.keras.layers.LSTM(16)(m)
 
-    p = tf.squeeze(p, axis=-1)
-    p = tf.keras.layers.LayerNormalization()(p)
-    p = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(64, activation='tanh'))(p)
-    p = tf.keras.layers.LSTM(128, return_sequences=True)(p)
-    p = tf.keras.layers.LSTM(64, return_sequences=True)(p)
-    p = tf.keras.layers.LSTM(32, return_sequences=True)(p)
-    p = tf.keras.layers.LSTM(16)(p)
+    encoder = tf.keras.Model(inputs=inputs, outputs=x)
 
-    x = tf.keras.layers.Concatenate()([m, p])
-    x = tf.keras.layers.Dense(waveform_input_shape[0], activation='linear')(x)
-    x = tf.keras.layers.Reshape(waveform_input_shape)(x)
-    stft_decoder = tf.keras.Model(inputs=stft_inputs, outputs=x, name='stft_decoder')
-
-    stft_autoencoder = tf.keras.Model(inputs=inputs, outputs=stft_decoder(stft_encoder(inputs)), name='stft_autoencoder')
-
-    return stft_autoencoder
+    # x = tf.keras.layers.Concatenate()([m, p])
+    # x = tf.keras.layers.Dense(waveform_input_shape[0], activation='linear')(x)
+    # x = tf.keras.layers.Reshape(waveform_input_shape)(x)
+    # stft_decoder = tf.keras.Model(inputs=stft_inputs, outputs=x, name='stft_decoder')
+    #
+    # stft_autoencoder = tf.keras.Model(inputs=inputs, outputs=stft_decoder(stft_encoder(inputs)), name='stft_autoencoder')
+    #
+    # return stft_autoencoder
+    return encoder
 
 
 def get_sample_model(latent_dim=8, sr=44100, duration=1.0):
@@ -399,8 +413,8 @@ def get_model(latent_dim=8, sr=44100, duration=1.0, spectrogram_shape=(80, 1025)
 
 
 if __name__ == '__main__':
-    m = get_stft_autoencoder(sr=11025)
-    m.build((32, 11025, 1))
+    m = get_stft_autoencoder(sr=44100)
+    m.build((32, 44100, 1))
     m.summary()
     # test = m.decoder(tf.expand_dims(tf.convert_to_tensor([0, 0, 0, 0, 0, 0, 0, 0]), 0))
     # blah = m.encoder(test)
