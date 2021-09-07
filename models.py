@@ -270,8 +270,8 @@ def get_stft_autoencoder(sr=22050, duration=1.0):
 
     m = tf.squeeze(m, axis=-1)
     m = tf.keras.layers.LayerNormalization()(m)
-    m = tf.keras.layers.LSTM(64, return_sequences=True)(m)
-    m = tf.keras.layers.LSTM(64)(m)
+    m = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(64, activation='tanh'))(m)
+    m = tf.keras.layers.LSTM(256)(m)
     # m = tf.keras.layers.Flatten()(m)
     # m = tf.keras.layers.TimeDistributed(tf.keras.layers.Conv1D(64, 3, activation='tanh'))(m)
     # m = tf.keras.layers.MaxPooling2D()(m)
@@ -281,8 +281,8 @@ def get_stft_autoencoder(sr=22050, duration=1.0):
 
     p = tf.squeeze(p, axis=-1)
     p = tf.keras.layers.LayerNormalization()(p)
-    p = tf.keras.layers.LSTM(64, return_sequences=True)(p)
-    p = tf.keras.layers.LSTM(64)(p)
+    p = tf.keras.layers.TimeDistributed(tf.keras.layers.Dense(64, activation='tanh'))(p)
+    p = tf.keras.layers.LSTM(256)(p)
     # p = tf.keras.layers.TimeDistributed(tf.keras.layers.Conv1D(16, 3, activation='tanh'))(p)
     # p = tf.keras.layers.Flatten()(p)
     # p = tf.keras.layers.TimeDistributed(tf.keras.layers.Conv1D(64, 3, activation='tanh'))(p)
