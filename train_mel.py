@@ -26,9 +26,8 @@ if __name__ == '__main__':
     else:
         autoencoder = get_stft_autoencoder(sr, duration)
 
-    autoencoder.summary()
-
     autoencoder.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), loss=tf.keras.losses.Huber())
+    autoencoder.summary()
     autoencoder.fit(sequence, epochs=epochs, callbacks=[
         WaveformCallback(sequence, sr=sr, logdir=logdir),
         tf.keras.callbacks.TensorBoard(log_dir=logdir)
