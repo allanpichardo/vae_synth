@@ -18,7 +18,7 @@ if __name__ == '__main__':
     sr = 44100
     duration = 1.0
     batch_size = 16
-    latent_dim = 20
+    latent_dim = 8
     spectrogram_shape = (80, 1025)
     epochs = 200
 
@@ -29,7 +29,8 @@ if __name__ == '__main__':
         autoencoder = VAE(
             tf.keras.models.load_model(stft_model_path, compile=False),
             tf.keras.models.load_model(enc_model_path, compile=False),
-            tf.keras.models.load_model(dec_model_path, compile=False)
+            tf.keras.models.load_model(dec_model_path, compile=False),
+            batch_size=batch_size
         )
     else:
         autoencoder = get_model(latent_dim=latent_dim, sr=sr, duration=duration, spectrogram_shape=spectrogram_shape)

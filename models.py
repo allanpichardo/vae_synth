@@ -91,12 +91,14 @@ class VAE(keras.Model):
         y_pred = self.decoder(z)
         return y_pred
 
-    def __init__(self, stft, encoder, decoder, **kwargs):
+    def __init__(self, stft, encoder, decoder, batch_size=16, **kwargs):
         super(VAE, self).__init__(**kwargs)
+        self.batch_size = batch_size
         self.stft = stft
         self.encoder = encoder
         self.decoder = decoder
         self.total_loss_tracker = keras.metrics.Mean(name="total_loss")
+        self.audio_loss = keras.metrics.Mean(name="audio_loss")
         self.reconstruction_loss_tracker = keras.metrics.Mean(
             name="reconstruction_loss"
         )
@@ -106,12 +108,22 @@ class VAE(keras.Model):
     def metrics(self):
         return [
             self.total_loss_tracker,
+            self.audio_loss,
             self.reconstruction_loss_tracker,
             self.kl_loss_tracker,
         ]
 
     def root_mean_squared_error(self, y_true, y_pred):
         return tf.sqrt(tf.reduce_mean(tf.square(y_pred - y_true)))
+
+    def pad_up_to(self, t, max_in_dims, constant_values):
+        s = tf.shape(t)
+        paddings = [[0, m - s[i]] for (i, m) in enumerate(max_in_dims)]
+        return tf.pad(t, paddings, 'CONSTANT', constant_values=constant_values)
+
+    def pad_second_dim(self, input, desired_size):
+        padding = tf.tile([[0.0]], tf.stack([tf.shape(input)[0], desired_size - tf.shape(input)[1]], 0))
+        return tf.concat([input, padding], 1)
 
     def train_step(self, data):
         if isinstance(data, tuple):
@@ -120,21 +132,26 @@ class VAE(keras.Model):
             stft_out = self.stft(data)
             z_mean, z_log_var, z = self.encoder(stft_out)
             reconstruction = self.decoder(z)
+            audio_reconstruction = kapre.InverseSTFT(n_fft=2048)(mag_phase_to_complex(reconstruction))
+            audio_reconstruction = self.pad_up_to(audio_reconstruction, [self.batch_size, data.shape[1], data.shape[2]], 0.0)
 
             reconstruction_loss = self.root_mean_squared_error(stft_out, reconstruction)
+            audio_reconstruction_loss = tf.keras.losses.MeanAbsoluteError(reduction="auto", name="mean_absolute_error")(data, audio_reconstruction)
 
             coefficient = 0.0001
             kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
             kl_loss = tf.reduce_mean(tf.reduce_sum(kl_loss, axis=1)) * coefficient
-            total_loss = reconstruction_loss + kl_loss
+            total_loss = reconstruction_loss + kl_loss + audio_reconstruction_loss
 
         grads = tape.gradient(total_loss, self.trainable_weights)
         self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
         self.total_loss_tracker.update_state(total_loss)
+        self.audio_loss.update_state(audio_reconstruction_loss)
         self.reconstruction_loss_tracker.update_state(reconstruction_loss)
         self.kl_loss_tracker.update_state(kl_loss)
         return {
             "loss": self.total_loss_tracker.result(),
+            "audio_reconstruction_loss": self.audio_loss.result(),
             "reconstruction_loss": self.reconstruction_loss_tracker.result(),
             "kl_loss": self.kl_loss_tracker.result(),
         }
