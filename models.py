@@ -135,7 +135,7 @@ class VAE(keras.Model):
             audio_reconstruction = kapre.InverseSTFT(n_fft=2048)(mag_phase_to_complex(reconstruction))
             audio_reconstruction = self.pad_up_to(audio_reconstruction, [self.batch_size, data.shape[1], data.shape[2]], 0.0)
 
-            reconstruction_loss = tf.keras.losses.CategoricalCrossentropy(from_logits=True)(stft_out, reconstruction)
+            reconstruction_loss = tf.keras.losses.MeanAbsoluteError()(stft_out, reconstruction)
             audio_reconstruction_loss = tf.keras.losses.Huber()(data, audio_reconstruction)
 
             coefficient = 0.0001
