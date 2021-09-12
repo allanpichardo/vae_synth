@@ -330,7 +330,7 @@ def get_model(latent_dim=8, sr=44100, duration=1.0, spectrogram_shape=(80, 1025)
     x2 = layers.Lambda(lambda m: tf.image.resize_with_crop_or_pad(m, spectrogram_shape[0], spectrogram_shape[1]))(x2)
 
     x = tf.keras.layers.Concatenate()([x, x2])
-    x = layers.experimental.preprocessing.Normalization(name='normalizer')(x)
+    x = tf.keras.layers.Normalization(name='normalizer')(x)
     stft_out = layers.Lambda(lambda m: tf.image.resize_with_crop_or_pad(m, spectrogram_shape[0], spectrogram_shape[1]))(
         x)
     stft_model = keras.Model(encoder_inputs, stft_out, name='stft')
