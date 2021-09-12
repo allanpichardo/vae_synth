@@ -258,12 +258,12 @@ def get_sample_synth_model(decoder, input_shape=(8,)):
     return keras.Model(inputs, x, name="synth")
 
 
-def conv_down_block(x, channels=32, activation=None, padding='same', waveform_input_shape=(44100, 1)):
+def conv_down_block(x, channels=32, activation=None, padding='same'):
     x = tf.keras.layers.Conv1D(channels, 5, padding=padding, activation=activation)(x)
     x = tf.keras.layers.AveragePooling1D()(x)
     return x
 
-def conv_up_block(x, channels=32, activation=None, padding='same', waveform_input_shape=(44100, 1)):
+def conv_up_block(x, channels=32, activation=None, padding='same'):
     x = tf.keras.layers.Conv1DTranspose(channels, 5, padding=padding, activation=activation)(x)
     x = tf.keras.layers.UpSampling1D()(x)
     return x
