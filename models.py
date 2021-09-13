@@ -99,8 +99,11 @@ class VAE(keras.Model):
         self.decoder = decoder
         self.total_loss_tracker = keras.metrics.Mean(name="total_loss")
         self.audio_loss = keras.metrics.Mean(name="audio_loss")
-        self.reconstruction_loss_tracker = keras.metrics.Mean(
-            name="reconstruction_loss"
+        self.fft_mag_loss_tracker = keras.metrics.Mean(
+            name="fft_mag_loss"
+        )
+        self.fft_phase_loss_tracker = keras.metrics.Mean(
+            name="fft_phase_loss"
         )
         self.kl_loss_tracker = keras.metrics.Mean(name="kl_loss")
 
@@ -109,7 +112,8 @@ class VAE(keras.Model):
         return [
             self.total_loss_tracker,
             self.audio_loss,
-            self.reconstruction_loss_tracker,
+            self.fft_mag_loss_tracker,
+            self.fft_phase_loss_tracker,
             self.kl_loss_tracker,
         ]
 
@@ -135,27 +139,34 @@ class VAE(keras.Model):
             stft_out = self.stft(data)
             z_mean, z_log_var, z = self.encoder(stft_out)
             reconstruction = self.decoder(z)
+
             audio_reconstruction = kapre.InverseSTFT(n_fft=2048)(mag_phase_to_complex(reconstruction, mean, var))
             audio_reconstruction = self.pad_up_to(audio_reconstruction, [self.batch_size, data.shape[1], data.shape[2]], 0.0)
 
-            reconstruction_loss = tf.keras.losses.Huber()(stft_out, reconstruction)
+            m, p, d = tf.split(stft_out, 3, axis=-1)
+            my, py, dy = tf.split(reconstruction, 3, axis=-1)
+
+            fft_mag_loss = tf.keras.losses.Huber()(m, my)
+            fft_phase_loss = tf.keras.losses.Huber()(p, py)
             audio_reconstruction_loss = tf.keras.losses.Huber()(data, audio_reconstruction)
 
             coefficient = 0.0001
             kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
             kl_loss = tf.reduce_mean(tf.reduce_sum(kl_loss, axis=1)) * coefficient
-            total_loss = kl_loss + reconstruction_loss
+            total_loss = kl_loss + fft_mag_loss + fft_phase_loss
 
         grads = tape.gradient(total_loss, self.trainable_weights)
         self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
         self.total_loss_tracker.update_state(total_loss)
         self.audio_loss.update_state(audio_reconstruction_loss)
-        self.reconstruction_loss_tracker.update_state(reconstruction_loss)
+        self.fft_mag_loss_tracker.update_state(fft_mag_loss)
+        self.fft_phase_loss_tracker.update_state(fft_phase_loss)
         self.kl_loss_tracker.update_state(kl_loss)
         return {
             "loss": self.total_loss_tracker.result(),
             "audio_reconstruction_loss": self.audio_loss.result(),
-            "reconstruction_loss": self.reconstruction_loss_tracker.result(),
+            "fft_mag_loss": self.fft_mag_loss_tracker.result(),
+            "fft_phase_loss": self.fft_phase_loss_tracker.result(),
             "kl_loss": self.kl_loss_tracker.result(),
         }
 
