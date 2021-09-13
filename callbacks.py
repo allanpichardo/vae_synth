@@ -16,6 +16,8 @@ class SpectrogramCallback(tf.keras.callbacks.Callback):
         self.logdir = logdir
         self.sr = sr
         self.n_fft = 2048
+        self.mean = []
+        self.variance = []
 
     def on_train_begin(self, logs=None):
         print("Initializing normalize layer...")
@@ -28,8 +30,11 @@ class SpectrogramCallback(tf.keras.callbacks.Callback):
             self.model.stft.get_layer('normalizer').adapt(spec_x)
             should_reset = False
 
-        print('Mean: {} | Var: {}'.format(self.model.stft.get_layer('normalizer').mean,
-                                          self.model.stft.get_layer('normalizer').variance))
+        self.mean = tf.squeeze(self.model.stft.get_layer('normalizer').mean)
+        self.variance = tf.squeeze(self.model.stft.get_layer('normalizer').variance)
+
+        print('Mean: {} | Var: {}'.format(self.mean,
+                                          self.variance))
 
     def normalize(self, x):
         return (x - tf.reduce_min(x, axis=[0, 1, 2])) / (tf.reduce_max(x, axis=[0, 1, 2]) - tf.reduce_min(x, axis=[0, 1, 2]))
@@ -40,10 +45,10 @@ class SpectrogramCallback(tf.keras.callbacks.Callback):
         spec_x = self.model.stft(x)
         u, v, embedding = self.model.encoder(spec_x)
         spec_y = self.model.decoder(embedding)
-        audio_y = kapre.InverseSTFT(n_fft=self.n_fft)(mag_phase_to_complex(spec_y))
+        audio_y = kapre.InverseSTFT(n_fft=self.n_fft)(mag_phase_to_complex(spec_y, self.mean, self.variance))
 
-        mag_x = kapre.MagnitudeToDecibel()(kapre.Magnitude()(mag_phase_to_complex(spec_x)))
-        mag_y = kapre.MagnitudeToDecibel()(kapre.Magnitude()(mag_phase_to_complex(spec_y)))
+        mag_x = kapre.MagnitudeToDecibel()(kapre.Magnitude()(mag_phase_to_complex(spec_x, self.mean, self.variance)))
+        mag_y = kapre.MagnitudeToDecibel()(kapre.Magnitude()(mag_phase_to_complex(spec_y, self.mean, self.variance)))
 
         file_writer = tf.summary.create_file_writer(self.logdir)
 

@@ -52,7 +52,7 @@ if __name__ == '__main__':
     autoencoder.encoder.save(enc_model_path, save_format='tf', include_optimizer=False)
     autoencoder.decoder.save(dec_model_path, save_format='tf', include_optimizer=False)
 
-    synth = get_synth_model(autoencoder.decoder, input_shape=(latent_dim,))
+    synth = get_synth_model(autoencoder.decoder, autoencoder.stft.get_layer('normalizer'), input_shape=(latent_dim,))
     synth.summary()
     #
     random = tf.random.normal([5, latent_dim])

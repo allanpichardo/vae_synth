@@ -259,10 +259,13 @@ def conv_1d_transpose_block(filters, inputs):
     return tf.keras.Model(inputs, x, name='sampleDeconv')
 
 
-def get_synth_model(decoder, input_shape=(20,), n_fft=2048):
+def get_synth_model(decoder, normalize_layer, input_shape=(20,), n_fft=2048):
+    mean = tf.squeeze(normalize_layer.mean)
+    var = tf.squeeze(normalize_layer.variance)
+
     inputs = keras.Input(shape=input_shape)
     x = decoder(inputs)
-    x = layers.Lambda(mag_phase_to_complex)(x)
+    x = layers.Lambda(lambda h: mag_phase_to_complex(h, mean, var))(x)
     x = kapre.InverseSTFT(n_fft=n_fft)(x)
     x = layers.Lambda(lambda h: tf.cast(h, tf.float32))(x)
     return keras.Model(inputs, x, name="synth")
