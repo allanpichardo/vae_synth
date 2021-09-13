@@ -346,7 +346,7 @@ def get_sample_model(latent_dim=8, sr=44100, duration=1.0):
 def get_model(latent_dim=20, sr=44100, duration=1.0, spectrogram_shape=(80, 1025), n_fft=2048):
     input_shape = (int(sr * duration), 1)
     encoder_inputs = keras.Input(shape=input_shape)
-    x = kapre.composed.get_stft_mag_phase(input_shape, n_fft=n_fft, return_decibel=False)(encoder_inputs)
+    x = kapre.composed.get_stft_mag_phase(input_shape, n_fft=n_fft, return_decibel=True)(encoder_inputs)
     x = layers.Lambda(lambda m: tf.image.resize_with_crop_or_pad(m, spectrogram_shape[0], spectrogram_shape[1]))(x)
 
     x = tf.keras.layers.Normalization(name='normalizer')(x)
