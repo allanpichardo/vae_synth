@@ -1,9 +1,9 @@
 import tensorflow as tf
 
 
-def mag_phase_to_complex(x, mean=[0.1920853, 0.0013434, 0.0], var=[4.5187917, 1.7998056, 1.0]):
+def mag_phase_to_complex(x, mean=[1.8400466, 0.00264591], var=[163.19633, 3.3680449]):
     x = (x * tf.sqrt(var)) + mean
-    m, p, mels = tf.split(x, 3, axis=3)
+    m, p = tf.split(x, 2, axis=3)
     real = m * tf.cos(p)
     imag = m * tf.sin(p)
     return tf.complex(real, imag)

@@ -259,7 +259,7 @@ def conv_1d_transpose_block(filters, inputs):
     return tf.keras.Model(inputs, x, name='sampleDeconv')
 
 
-def get_synth_model(decoder, input_shape=(8,), n_fft=2048):
+def get_synth_model(decoder, input_shape=(20,), n_fft=2048):
     inputs = keras.Input(shape=input_shape)
     x = decoder(inputs)
     x = layers.Lambda(mag_phase_to_complex)(x)
@@ -337,71 +337,70 @@ def get_sample_model(latent_dim=8, sr=44100, duration=1.0):
     return SampleVAE(encoder, decoder)
 
 
-def get_model(latent_dim=8, sr=44100, duration=1.0, spectrogram_shape=(80, 1025), n_fft=2048):
+def get_model(latent_dim=20, sr=44100, duration=1.0, spectrogram_shape=(80, 1025), n_fft=2048):
     input_shape = (int(sr * duration), 1)
     encoder_inputs = keras.Input(shape=input_shape)
     x = kapre.composed.get_stft_mag_phase(input_shape, n_fft=n_fft, return_decibel=False)(encoder_inputs)
     x = layers.Lambda(lambda m: tf.image.resize_with_crop_or_pad(m, spectrogram_shape[0], spectrogram_shape[1]))(x)
 
-    x2 = kapre.composed.get_stft_magnitude_layer(input_shape, n_fft=n_fft, return_decibel=True)(encoder_inputs)
-    x2 = layers.Lambda(lambda m: tf.image.resize_with_crop_or_pad(m, spectrogram_shape[0], spectrogram_shape[1]))(x2)
-
-    x = tf.keras.layers.Concatenate()([x, x2])
     x = tf.keras.layers.Normalization(name='normalizer')(x)
     stft_out = layers.Lambda(lambda m: tf.image.resize_with_crop_or_pad(m, spectrogram_shape[0], spectrogram_shape[1]))(
         x)
     stft_model = keras.Model(encoder_inputs, stft_out, name='stft')
 
-    img_inputs = keras.Input(shape=(spectrogram_shape[0], spectrogram_shape[1], 3))
-    x = tf.keras.layers.Conv2D(16, 3, activation='tanh', padding='same')(img_inputs)
-    x = tf.keras.layers.Conv2D(16, 3, activation='elu', padding='same')(x)
-    x = tf.keras.layers.Conv2D(16, 3, activation='elu', padding='same')(x)
+    img_inputs = keras.Input(shape=(spectrogram_shape[0], spectrogram_shape[1], 2))
+    a, b = tf.split(img_inputs, 2, axis=-1)
+
+    a = tf.squeeze(a, axis=-1)
+    a = tf.keras.layers.LSTM(32, return_sequences=True)(a)
+    a = tf.expand_dims(a, 3)
+
+    b = tf.squeeze(b, axis=-1)
+    b = tf.keras.layers.LSTM(32, return_sequences=True)(b)
+    b = tf.expand_dims(b, 3)
+
+    x = tf.keras.layers.Concatenate(axis=2)([a, b])
+    x = tf.keras.layers.TimeDistributed(tf.keras.layers.Conv1D(64, 3, padding='same', activation='tanh'))(x)
     x = tf.keras.layers.MaxPooling2D()(x)
-    x = tf.keras.layers.Conv2D(20, 3, activation='elu', padding='same')(x)
-    x = tf.keras.layers.Conv2D(20, 3, activation='elu', padding='same')(x)
-    x = tf.keras.layers.Conv2D(20, 3, activation='elu', padding='same')(x)
+    x = tf.keras.layers.TimeDistributed(tf.keras.layers.Conv1D(96, 3, padding='same', activation='tanh'))(x)
     x = tf.keras.layers.MaxPooling2D()(x)
-    x = tf.keras.layers.Conv2D(24, 3, activation='elu', padding='same')(x)
-    x = tf.keras.layers.Conv2D(24, 3, activation='elu', padding='same')(x)
-    x = tf.keras.layers.Conv2D(24, 3, activation='elu', padding='same')(x)
+    x = tf.keras.layers.TimeDistributed(tf.keras.layers.Conv1D(144, 3, padding='same', activation='tanh'))(x)
     x = tf.keras.layers.MaxPooling2D()(x)
-    x = tf.keras.layers.Conv2D(28, 3, activation='elu', padding='same')(x)
-    x = tf.keras.layers.Conv2D(28, 3, activation='elu', padding='same')(x)
-    x = tf.keras.layers.Conv2D(28, 3, activation='elu', padding='same')(x)
+    x = tf.keras.layers.TimeDistributed(tf.keras.layers.Conv1D(216, 3, padding='same', activation='tanh'))(x)
     x = tf.keras.layers.MaxPooling2D()(x)
-    x = tf.keras.layers.Conv2D(32, 3, activation='elu', padding='same')(x)
-    x = tf.keras.layers.Conv2D(32, 3, activation='elu', padding='same')(x)
-    x = tf.keras.layers.Conv2D(32, 3, activation='elu', padding='same')(x)
-    x = layers.Flatten()(x)
-    z_mean = layers.Dense(latent_dim, name="z_mean", activation=None)(x)
-    z_log_var = layers.Dense(latent_dim, name="z_log_var", activation=None)(x)
+    x = tf.keras.layers.TimeDistributed(tf.keras.layers.Conv1D(324, 3, padding='same', activation='tanh'))(x)
+
+    z_mean = tf.keras.layers.Conv2D(1, 3, padding='same', activation=None)(x)
+    z_mean = tf.keras.layers.Flatten(name="z_mean")(z_mean)
+    z_log_var = tf.keras.layers.Conv2D(1, 3, padding='same', activation=None)(x)
+    z_log_var = tf.keras.layers.Flatten(name="z_log_var")(z_log_var)
     z = Sampling()([z_mean, z_log_var])
     encoder = keras.Model(img_inputs, [z_mean, z_log_var, z], name="encoder")
 
-    latent_inputs = keras.Input(shape=(latent_dim,))
-    x = layers.Dense(5 * 64 * 32, activation='linear')(latent_inputs)
-    x = layers.Reshape((5, 64, 32))(x)
-    x = tf.keras.layers.Conv2DTranspose(32, 3, activation='tanh', padding='same')(x)
-    x = tf.keras.layers.Conv2DTranspose(32, 3, activation='elu', padding='same')(x)
-    x = tf.keras.layers.Conv2DTranspose(32, 3, activation='elu', padding='same')(x)
+    latent_inputs = keras.Input(shape=(20,))
+    x = layers.Reshape((5, 4, 1))(latent_inputs)
+    x = tf.keras.layers.TimeDistributed(tf.keras.layers.Conv1DTranspose(324, 3, padding='same', activation='tanh'))(x)
     x = layers.UpSampling2D(interpolation="nearest")(x)
-    x = tf.keras.layers.Conv2DTranspose(28, 3, activation='elu', padding='same')(x)
-    x = tf.keras.layers.Conv2DTranspose(28, 3, activation='elu', padding='same')(x)
-    x = tf.keras.layers.Conv2DTranspose(28, 3, activation='elu', padding='same')(x)
+    x = tf.keras.layers.TimeDistributed(tf.keras.layers.Conv1DTranspose(216, 3, padding='same', activation='tanh'))(x)
     x = layers.UpSampling2D(interpolation="nearest")(x)
-    x = tf.keras.layers.Conv2DTranspose(24, 3, activation='elu', padding='same')(x)
-    x = tf.keras.layers.Conv2DTranspose(24, 3, activation='elu', padding='same')(x)
-    x = tf.keras.layers.Conv2DTranspose(24, 3, activation='elu', padding='same')(x)
+    x = tf.keras.layers.TimeDistributed(tf.keras.layers.Conv1DTranspose(144, 3, padding='same', activation='tanh'))(x)
     x = layers.UpSampling2D(interpolation="nearest")(x)
-    x = tf.keras.layers.Conv2DTranspose(20, 3, activation='elu', padding='same')(x)
-    x = tf.keras.layers.Conv2DTranspose(20, 3, activation='elu', padding='same')(x)
-    x = tf.keras.layers.Conv2DTranspose(20, 3, activation='elu', padding='same')(x)
+    x = tf.keras.layers.TimeDistributed(tf.keras.layers.Conv1DTranspose(96, 3, padding='same', activation='tanh'))(x)
     x = layers.UpSampling2D(interpolation="nearest")(x)
-    x = layers.ZeroPadding2D(padding=[(0, 0), (0, 1)])(x)
-    x = tf.keras.layers.Conv2DTranspose(16, 3, activation='elu', padding='same')(x)
-    x = tf.keras.layers.Conv2DTranspose(16, 3, activation='elu', padding='same')(x)
-    x = tf.keras.layers.Conv2DTranspose(16, 3, activation='elu', padding='same')(x)
-    decoder_outputs = layers.Conv2DTranspose(3, 3, activation=None, padding="same")(x)
+    x = tf.keras.layers.TimeDistributed(tf.keras.layers.Conv1DTranspose(64, 3, padding='same', activation='tanh'))(x)
+
+    x = tf.keras.layers.Conv2D(2, 3, padding='same', activation=None)(x)
+    a, b = tf.split(x, 2, 3)
+
+    a = tf.squeeze(a, axis=-1)
+    a = tf.keras.layers.LSTM(1025, return_sequences=True)(a)
+    a = tf.expand_dims(a, 3)
+
+    b = tf.squeeze(b, axis=-1)
+    b = tf.keras.layers.LSTM(1025, return_sequences=True)(b)
+    b = tf.expand_dims(b, 3)
+
+    decoder_outputs = tf.keras.layers.Concatenate(axis=3)([a, b])
     decoder = keras.Model(latent_inputs, decoder_outputs, name="decoder")
 
     vae = VAE(stft_model, encoder, decoder)
@@ -410,9 +409,10 @@ def get_model(latent_dim=8, sr=44100, duration=1.0, spectrogram_shape=(80, 1025)
 
 
 if __name__ == '__main__':
-    m = get_stft_autoencoder()
+    m = get_model()
     m.build((32, 44100, 1))
-    m.summary()
+    m.encoder.summary()
+    m.decoder.summary()
     # test = m.decoder(tf.expand_dims(tf.convert_to_tensor([0, 0, 0, 0, 0, 0, 0, 0]), 0))
     # blah = m.encoder(test)
     # print(test)
