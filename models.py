@@ -129,10 +129,13 @@ class VAE(keras.Model):
         if isinstance(data, tuple):
             data = data[0]
         with tf.GradientTape() as tape:
+            mean = tf.squeeze(self.stft.get_layer('normalizer').mean)
+            var = tf.squeeze(self.stft.get_layer('normalizer').variance)
+
             stft_out = self.stft(data)
             z_mean, z_log_var, z = self.encoder(stft_out)
             reconstruction = self.decoder(z)
-            audio_reconstruction = kapre.InverseSTFT(n_fft=2048)(mag_phase_to_complex(reconstruction))
+            audio_reconstruction = kapre.InverseSTFT(n_fft=2048)(mag_phase_to_complex(reconstruction, mean, var))
             audio_reconstruction = self.pad_up_to(audio_reconstruction, [self.batch_size, data.shape[1], data.shape[2]], 0.0)
 
             reconstruction_loss = tf.keras.losses.MeanAbsoluteError()(stft_out, reconstruction)
