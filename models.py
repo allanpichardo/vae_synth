@@ -147,8 +147,8 @@ class VAE(keras.Model):
             my, py, dy = tf.split(reconstruction, 3, axis=-1)
 
             fft_mag_loss = tf.keras.losses.MeanSquaredLogarithmicError()(m, my)
-            fft_phase_loss = tf.keras.losses.MeanSqaredError()(p, py)
-            audio_reconstruction_loss = tf.keras.losses.MeanSqaredError()(data, audio_reconstruction)
+            fft_phase_loss = tf.keras.losses.MeanSquaredError()(p, py)
+            audio_reconstruction_loss = tf.keras.losses.MeanSquaredError()(data, audio_reconstruction)
 
             coefficient = 0.0001
             kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
