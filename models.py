@@ -138,13 +138,13 @@ class VAE(keras.Model):
             audio_reconstruction = kapre.InverseSTFT(n_fft=2048)(mag_phase_to_complex(reconstruction, mean, var))
             audio_reconstruction = self.pad_up_to(audio_reconstruction, [self.batch_size, data.shape[1], data.shape[2]], 0.0)
 
-            reconstruction_loss = tf.keras.losses.MeanAbsoluteError()(stft_out, reconstruction)
+            reconstruction_loss = tf.keras.losses.Huber()(stft_out, reconstruction)
             audio_reconstruction_loss = tf.keras.losses.Huber()(data, audio_reconstruction)
 
             coefficient = 0.0001
             kl_loss = -0.5 * (1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var))
             kl_loss = tf.reduce_mean(tf.reduce_sum(kl_loss, axis=1)) * coefficient
-            total_loss = reconstruction_loss + kl_loss + audio_reconstruction_loss
+            total_loss = kl_loss + audio_reconstruction_loss
 
         grads = tape.gradient(total_loss, self.trainable_weights)
         self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
